@@ -212,9 +212,47 @@ subroutine update_density_matrix_osoci
  integer :: iorb,jorb
  do i = 1, mo_tot_num
   do j = 1, mo_tot_num
-   one_body_dm_mo_alpha_osoci(i,j) = one_body_dm_mo_alpha_osoci(i,j) + (one_body_dm_mo_alpha(i,j) - one_body_dm_mo_alpha_generators_restart(i,j))
-   one_body_dm_mo_beta_osoci(i,j) = one_body_dm_mo_beta_osoci(i,j) + (one_body_dm_mo_beta(i,j) - one_body_dm_mo_beta_generators_restart(i,j))
+   one_body_dm_mo_alpha_osoci(i,j) = one_body_dm_mo_alpha_osoci(i,j) + (one_body_dm_mo_alpha_average(i,j) - one_body_dm_mo_alpha_generators_restart(i,j))
+   one_body_dm_mo_beta_osoci(i,j) = one_body_dm_mo_beta_osoci(i,j) + (one_body_dm_mo_beta_average(i,j) - one_body_dm_mo_beta_generators_restart(i,j))
   enddo
+ enddo
+
+
+end
+
+subroutine update_density_matrix_beta_osoci_read(array)
+ implicit none
+ BEGIN_DOC
+ ! one_body_dm_mo_alpha_osoci += Delta rho alpha
+ ! one_body_dm_mo_beta_osoci  += Delta rho beta
+ END_DOC
+ integer :: i,j
+ integer :: iorb,jorb
+ double precision :: array(mo_tot_num)
+ do i = 1, mo_tot_num
+   j = list_act(1)
+   one_body_dm_mo_beta_osoci(i,j) += array(i)
+   one_body_dm_mo_beta_osoci(j,i) += array(i)
+   one_body_dm_mo_beta_osoci(i,i) += array(i) * array(i)
+ enddo
+
+
+end
+
+subroutine update_density_matrix_alpha_osoci_read(array)
+ implicit none
+ BEGIN_DOC
+ ! one_body_dm_mo_alpha_osoci += Delta rho alpha
+ ! one_body_dm_mo_beta_osoci  += Delta rho beta
+ END_DOC
+ integer :: i,j
+ integer :: iorb,jorb
+ double precision :: array(mo_tot_num)
+ do i = 1, mo_tot_num
+   j = list_act(1)
+   one_body_dm_mo_alpha_osoci(i,j) += array(i)
+   one_body_dm_mo_alpha_osoci(j,i) += array(i)
+   one_body_dm_mo_alpha_osoci(i,i) += array(i) * array(i)
  enddo
 
 
@@ -332,20 +370,20 @@ subroutine save_osoci_natural_mos
  enddo
 
  tmp = tmp_bis
-!! Symetrization act-virt
- do j = 1, n_virt_orb
-  j_virt= list_virt(j)
-  accu = 0.d0
-  do i = 1, n_act_orb
-   jorb = list_act(i)
-   accu += dabs(tmp_bis(j_virt,jorb))
-  enddo
-  do i = 1, n_act_orb
-   iorb = list_act(i)
-   tmp(j_virt,iorb) = dsign(accu/dble(n_act_orb),tmp_bis(j_virt,iorb))
-   tmp(iorb,j_virt) = dsign(accu/dble(n_act_orb),tmp_bis(j_virt,iorb))
-  enddo
- enddo
+!!! Symetrization act-virt
+! do j = 1, n_virt_orb
+!  j_virt= list_virt(j)
+!  accu = 0.d0
+!  do i = 1, n_act_orb
+!   jorb = list_act(i)
+!   accu += dabs(tmp_bis(j_virt,jorb))
+!  enddo
+!  do i = 1, n_act_orb
+!   iorb = list_act(i)
+!   tmp(j_virt,iorb) = dsign(accu/dble(n_act_orb),tmp_bis(j_virt,iorb))
+!   tmp(iorb,j_virt) = dsign(accu/dble(n_act_orb),tmp_bis(j_virt,iorb))
+!  enddo
+! enddo
 
 !! Symetrization act-inact
 !do j = 1, n_inact_orb
@@ -387,16 +425,16 @@ subroutine save_osoci_natural_mos
   print*,'ACTIVE ORBITAL  ',iorb
   do j = 1, n_inact_orb
    jorb = list_inact(j)
-   if(dabs(tmp(iorb,jorb)).gt.threshold_singles)then
+   if(dabs(tmp(iorb,jorb)).gt.0.0001d0)then
     print*,'INACTIVE  '
-    print*,'DM ',iorb,jorb,dabs(tmp(iorb,jorb))
+    print*,'DM ',iorb,jorb,(tmp(iorb,jorb))
    endif
   enddo
   do j = 1, n_virt_orb
    jorb = list_virt(j)
-   if(dabs(tmp(iorb,jorb)).gt.threshold_singles)then
+   if(dabs(tmp(iorb,jorb)).gt.0.0001d0)then
     print*,'VIRT      '
-    print*,'DM ',iorb,jorb,dabs(tmp(iorb,jorb))
+    print*,'DM ',iorb,jorb,(tmp(iorb,jorb))
    endif
   enddo
  enddo
@@ -410,8 +448,13 @@ subroutine save_osoci_natural_mos
  enddo
 
  label = "Natural"
+ 
  call mo_as_eigvectors_of_mo_matrix(tmp,size(tmp,1),size(tmp,2),label,1)
- soft_touch mo_coef
+!if(disk_access_ao_integrals == "None" .or. disk_access_ao_integrals == "Write" )then
+! disk_access_ao_integrals = "Read"
+! touch disk_access_ao_integrals
+!endif
+!soft_touch mo_coef
  deallocate(tmp,occ)
 
 
@@ -518,16 +561,16 @@ subroutine set_osoci_natural_mos
   print*,'ACTIVE ORBITAL  ',iorb
   do j = 1, n_inact_orb
    jorb = list_inact(j)
-   if(dabs(tmp(iorb,jorb)).gt.threshold_singles)then
+   if(dabs(tmp(iorb,jorb)).gt.threshold_lmct)then
     print*,'INACTIVE  '
-    print*,'DM ',iorb,jorb,dabs(tmp(iorb,jorb))
+    print*,'DM ',iorb,jorb,(tmp(iorb,jorb))
    endif
   enddo
   do j = 1, n_virt_orb
    jorb = list_virt(j)
-   if(dabs(tmp(iorb,jorb)).gt.threshold_singles)then
+   if(dabs(tmp(iorb,jorb)).gt.threshold_mlct)then
     print*,'VIRT      '
-    print*,'DM ',iorb,jorb,dabs(tmp(iorb,jorb))
+    print*,'DM ',iorb,jorb,(tmp(iorb,jorb))
    endif
   enddo
  enddo
@@ -587,14 +630,14 @@ end
    integer :: i
    double precision :: accu_tot,accu_sd
    print*,'touched the one_body_dm_mo_beta'
-   one_body_dm_mo_alpha = one_body_dm_mo_alpha_osoci
-   one_body_dm_mo_beta = one_body_dm_mo_beta_osoci
+   one_body_dm_mo_alpha_average = one_body_dm_mo_alpha_osoci
+   one_body_dm_mo_beta_average = one_body_dm_mo_beta_osoci
    touch one_body_dm_mo_alpha  one_body_dm_mo_beta 
    accu_tot = 0.d0
    accu_sd  = 0.d0
    do i = 1, mo_tot_num
-    accu_tot += one_body_dm_mo_alpha(i,i) + one_body_dm_mo_beta(i,i)
-    accu_sd  += one_body_dm_mo_alpha(i,i) - one_body_dm_mo_beta(i,i)
+    accu_tot += one_body_dm_mo_alpha_average(i,i) + one_body_dm_mo_beta_average(i,i)
+    accu_sd  += one_body_dm_mo_alpha_average(i,i) - one_body_dm_mo_beta_average(i,i)
    enddo
    print*,'accu_tot = ',accu_tot
    print*,'accu_sdt = ',accu_sd 
@@ -602,15 +645,210 @@ end
  
  subroutine provide_properties
    implicit none
-   integer :: i
-   double precision :: accu
-   if(.True.)then
-    accu= 0.d0
-    do i = 1, nucl_num
-     accu += mulliken_spin_densities(i)
-     print*,i,nucl_charge(i),mulliken_spin_densities(i)
-    enddo
-    print*,'Sum of Mulliken SD = ',accu
-   endif
+   call print_mulliken_sd
+   call print_hcc
  end
 
+
+
+ subroutine dress_diag_elem_2h1p(dressing_H_mat_elem,ndet,lmct,i_hole)
+  use bitmasks
+  double precision, intent(inout) :: dressing_H_mat_elem(Ndet)
+  integer, intent(in) :: ndet,i_hole
+  logical, intent(in) :: lmct
+  ! if lmct = .True. ===> LMCT
+  ! else             ===> MLCT
+  implicit none
+  integer :: i
+  integer :: n_p,n_h,number_of_holes,number_of_particles
+  integer :: exc(0:2,2,2)
+  integer :: degree
+  double precision :: phase
+  integer :: h1,h2,p1,p2,s1,s2
+  do i = 1, N_det
+
+   n_h = number_of_holes(psi_det(1,1,i))
+   n_p = number_of_particles(psi_det(1,1,i))
+   call get_excitation(ref_bitmask,psi_det(1,1,i),exc,degree,phase,N_int)
+   call decode_exc(exc,degree,h1,p1,h2,p2,s1,s2)
+   if (n_h == 0.and.n_p==0)then ! CAS
+    dressing_H_mat_elem(i)+= total_corr_e_2h1p
+    if(lmct)then
+     dressing_H_mat_elem(i) += - corr_energy_2h1p_per_orb_ab(i_hole) - corr_energy_2h1p_per_orb_bb(i_hole)    
+    endif
+   endif
+   if (n_h == 1.and.n_p==0)then ! 1h
+     dressing_H_mat_elem(i)+= 0.d0
+   else if (n_h == 0.and.n_p==1)then ! 1p
+    dressing_H_mat_elem(i)+= total_corr_e_2h1p
+    dressing_H_mat_elem(i) += - corr_energy_2h1p_per_orb_ab(p1) - corr_energy_2h1p_per_orb_aa(p1)  
+   else if (n_h == 1.and.n_p==1)then ! 1h1p
+!   if(degree==1)then
+     dressing_H_mat_elem(i)+= total_corr_e_2h1p
+     dressing_H_mat_elem(i)+= - corr_energy_2h1p_per_orb_ab(h1) 
+!   else 
+!    dressing_H_mat_elem(i) += - corr_energy_2h2p_per_orb_ab(h1) &  
+!    - 0.5d0 * (corr_energy_2h2p_per_orb_aa(h1) + corr_energy_2h2p_per_orb_bb(h1))
+!    dressing_H_mat_elem(i) += - corr_energy_2h2p_per_orb_ab(p2) &  
+!    - 0.5d0 * (corr_energy_2h2p_per_orb_aa(p2) + corr_energy_2h2p_per_orb_bb(p2))
+!    dressing_H_mat_elem(i) += 0.5d0 * (corr_energy_2h2p_for_1h1p_double(h1,p1))
+!   endif
+   else if (n_h == 2.and.n_p==1)then ! 2h1p
+    dressing_H_mat_elem(i)+= 0.d0
+   else if (n_h == 1.and.n_p==2)then ! 1h2p
+    dressing_H_mat_elem(i)+= total_corr_e_2h1p
+    dressing_H_mat_elem(i) += - corr_energy_2h1p_per_orb_ab(h1) 
+   endif
+  enddo
+ 
+ end
+
+ subroutine dress_diag_elem_1h2p(dressing_H_mat_elem,ndet,lmct,i_hole)
+  use bitmasks
+  double precision, intent(inout) :: dressing_H_mat_elem(Ndet)
+  integer, intent(in) :: ndet,i_hole
+  logical, intent(in) :: lmct
+  ! if lmct = .True. ===> LMCT
+  ! else             ===> MLCT
+  implicit none
+  integer :: i
+  integer :: n_p,n_h,number_of_holes,number_of_particles
+  integer :: exc(0:2,2,2)
+  integer :: degree
+  double precision :: phase
+  integer :: h1,h2,p1,p2,s1,s2
+  do i = 1, N_det
+
+   n_h = number_of_holes(psi_det(1,1,i))
+   n_p = number_of_particles(psi_det(1,1,i))
+   call get_excitation(ref_bitmask,psi_det(1,1,i),exc,degree,phase,N_int)
+   call decode_exc(exc,degree,h1,p1,h2,p2,s1,s2)
+   if (n_h == 0.and.n_p==0)then ! CAS
+    dressing_H_mat_elem(i)+= total_corr_e_1h2p
+    if(.not.lmct)then
+     dressing_H_mat_elem(i) += - corr_energy_1h2p_per_orb_ab(i_hole) - corr_energy_1h2p_per_orb_aa(i_hole)    
+    endif
+   endif
+   if (n_h == 1.and.n_p==0)then ! 1h
+     dressing_H_mat_elem(i)+= total_corr_e_1h2p - corr_energy_1h2p_per_orb_ab(h1)
+   else if (n_h == 0.and.n_p==1)then ! 1p
+    dressing_H_mat_elem(i)+= 0.d0
+   else if (n_h == 1.and.n_p==1)then ! 1h1p
+    if(degree==1)then
+     dressing_H_mat_elem(i)+= total_corr_e_1h2p
+     dressing_H_mat_elem(i)+= - corr_energy_1h2p_per_orb_ab(h1) 
+    else 
+     dressing_H_mat_elem(i) +=0.d0
+    endif
+!    dressing_H_mat_elem(i) += - corr_energy_2h2p_per_orb_ab(h1) &  
+!    - 0.5d0 * (corr_energy_2h2p_per_orb_aa(h1) + corr_energy_2h2p_per_orb_bb(h1))
+!    dressing_H_mat_elem(i) += - corr_energy_2h2p_per_orb_ab(p2) &  
+!    - 0.5d0 * (corr_energy_2h2p_per_orb_aa(p2) + corr_energy_2h2p_per_orb_bb(p2))
+!    dressing_H_mat_elem(i) += 0.5d0 * (corr_energy_2h2p_for_1h1p_double(h1,p1))
+!   endif
+   else if (n_h == 2.and.n_p==1)then ! 2h1p
+    dressing_H_mat_elem(i)+= total_corr_e_1h2p
+    dressing_H_mat_elem(i)+= - corr_energy_1h2p_per_orb_ab(h1) - corr_energy_1h2p_per_orb_ab(h1)
+   else if (n_h == 1.and.n_p==2)then ! 1h2p
+    dressing_H_mat_elem(i) += 0.d0
+   endif
+  enddo
+ 
+ end
+
+ subroutine dress_diag_elem_2h2p(dressing_H_mat_elem,ndet)
+  use bitmasks
+  double precision, intent(inout) :: dressing_H_mat_elem(Ndet)
+  integer, intent(in) :: ndet
+  implicit none
+  integer :: i
+  integer :: n_p,n_h,number_of_holes,number_of_particles
+  integer :: exc(0:2,2,2)
+  integer :: degree
+  double precision :: phase
+  integer :: h1,h2,p1,p2,s1,s2
+  do i = 1, N_det
+   dressing_H_mat_elem(i)+= total_corr_e_2h2p
+
+   n_h = number_of_holes(psi_det(1,1,i))
+   n_p = number_of_particles(psi_det(1,1,i))
+   call get_excitation(ref_bitmask,psi_det(1,1,i),exc,degree,phase,N_int)
+   call decode_exc(exc,degree,h1,p1,h2,p2,s1,s2)
+   if (n_h == 1.and.n_p==0)then ! 1h
+    dressing_H_mat_elem(i) += - corr_energy_2h2p_per_orb_ab(h1) &  
+    - 0.5d0 * (corr_energy_2h2p_per_orb_aa(h1) + corr_energy_2h2p_per_orb_bb(h1))
+   else if (n_h == 0.and.n_p==1)then ! 1p
+    dressing_H_mat_elem(i) += - corr_energy_2h2p_per_orb_ab(p1) &  
+    - 0.5d0 * (corr_energy_2h2p_per_orb_aa(p1) + corr_energy_2h2p_per_orb_bb(p1))
+   else if (n_h == 1.and.n_p==1)then ! 1h1p
+    if(degree==1)then
+     dressing_H_mat_elem(i) += - corr_energy_2h2p_per_orb_ab(h1) &  
+     - 0.5d0 * (corr_energy_2h2p_per_orb_aa(h1) + corr_energy_2h2p_per_orb_bb(h1))
+     dressing_H_mat_elem(i) += - corr_energy_2h2p_per_orb_ab(p1) &  
+     - 0.5d0 * (corr_energy_2h2p_per_orb_aa(p1) + corr_energy_2h2p_per_orb_bb(p1))
+     dressing_H_mat_elem(i) += 0.5d0 * (corr_energy_2h2p_for_1h1p_a(h1,p1) + corr_energy_2h2p_for_1h1p_b(h1,p1))
+    else 
+     dressing_H_mat_elem(i) += - corr_energy_2h2p_per_orb_ab(h1) &  
+     - 0.5d0 * (corr_energy_2h2p_per_orb_aa(h1) + corr_energy_2h2p_per_orb_bb(h1))
+     dressing_H_mat_elem(i) += - corr_energy_2h2p_per_orb_ab(p2) &  
+     - 0.5d0 * (corr_energy_2h2p_per_orb_aa(p2) + corr_energy_2h2p_per_orb_bb(p2))
+     dressing_H_mat_elem(i) += 0.5d0 * (corr_energy_2h2p_for_1h1p_double(h1,p1))
+    endif
+   else if (n_h == 2.and.n_p==1)then ! 2h1p
+    dressing_H_mat_elem(i) += - corr_energy_2h2p_per_orb_ab(h1) - corr_energy_2h2p_per_orb_bb(h1) & 
+                              - corr_energy_2h2p_per_orb_ab(h2)                                   & 
+                              - 0.5d0 * ( corr_energy_2h2p_per_orb_bb(h2) + corr_energy_2h2p_per_orb_bb(h2)) 
+    dressing_H_mat_elem(i) += - corr_energy_2h2p_per_orb_ab(p1)
+    if(s1.ne.s2)then
+      dressing_H_mat_elem(i) +=  corr_energy_2h2p_ab_2_orb(h1,h2)
+    else 
+      dressing_H_mat_elem(i) +=  corr_energy_2h2p_bb_2_orb(h1,h2)
+    endif
+   else if (n_h == 1.and.n_p==2)then ! 1h2p
+    dressing_H_mat_elem(i) += - corr_energy_2h2p_per_orb_ab(h1) &  
+    - 0.5d0 * (corr_energy_2h2p_per_orb_aa(h1) + corr_energy_2h2p_per_orb_bb(h1))
+    dressing_H_mat_elem(i) += - corr_energy_2h2p_per_orb_ab(p1) &  
+    - 0.5d0 * (corr_energy_2h2p_per_orb_aa(p1) + corr_energy_2h2p_per_orb_bb(p1))
+    dressing_H_mat_elem(i) += - corr_energy_2h2p_per_orb_ab(p2) &  
+    - 0.5d0 * (corr_energy_2h2p_per_orb_aa(p2) + corr_energy_2h2p_per_orb_bb(p2))
+    if(s1.ne.s2)then
+      dressing_H_mat_elem(i) +=  corr_energy_2h2p_ab_2_orb(p1,p2)
+    else 
+      dressing_H_mat_elem(i) +=  corr_energy_2h2p_bb_2_orb(p1,p2)
+    endif
+   endif
+  enddo
+ 
+ end
+
+ subroutine diag_dressed_2h2p_hamiltonian_and_update_psi_det(i_hole,lmct)
+ implicit none
+ double precision, allocatable :: dressing_H_mat_elem(:),energies(:)
+  integer, intent(in) :: i_hole
+  logical, intent(in) :: lmct
+  ! if lmct = .True. ===> LMCT
+  ! else             ===> MLCT
+ integer :: i
+ double precision :: hij
+ allocate(dressing_H_mat_elem(N_det),energies(N_states_diag))
+  print*,''
+  print*,'dressing with the 2h2p in a CC logic'
+  print*,''
+  do i = 1, N_det
+   call i_h_j(psi_det(1,1,i),psi_det(1,1,i),N_int,hij)
+   dressing_H_mat_elem(i) = hij
+  enddo
+  call dress_diag_elem_2h2p(dressing_H_mat_elem,N_det)
+  call dress_diag_elem_2h1p(dressing_H_mat_elem,N_det,lmct,i_hole)
+  call dress_diag_elem_1h2p(dressing_H_mat_elem,N_det,lmct,i_hole)
+  call davidson_diag_hjj(psi_det,psi_coef,dressing_H_mat_elem,energies,size(psi_coef,1),N_det,N_states,N_states_diag,N_int,output_determinants)
+  do i = 1, 2
+   print*,'psi_coef = ',psi_coef(i,1)
+  enddo
+  
+  
+ deallocate(dressing_H_mat_elem)
+
+
+
+ end

@@ -30,8 +30,8 @@ module map_module
  integer*8, parameter           :: map_mask  = ibset(0_8,15)-1_8
 
  type cache_map_type
-  integer(cache_key_kind), pointer :: key(:)
   real(integral_kind), pointer   :: value(:)
+  integer(cache_key_kind), pointer :: key(:)
   logical                        :: sorted
   integer(cache_map_size_kind)   :: map_size
   integer(cache_map_size_kind)   :: n_elements
@@ -40,9 +40,13 @@ module map_module
 
  type map_type
   type(cache_map_type), allocatable :: map(:)
+  real(integral_kind), pointer   :: consolidated_value(:)
+  integer(cache_key_kind), pointer :: consolidated_key(:)
+  integer*8, pointer             :: consolidated_idx(:)
+  logical                        :: sorted
+  logical                        :: consolidated
   integer(map_size_kind)         :: map_size
   integer(map_size_kind)         :: n_elements
-  logical                        :: sorted
   integer(omp_lock_kind)         :: lock
  end type map_type
 
@@ -92,6 +96,7 @@ subroutine map_init(map,keymax)
   
   map%n_elements = 0_8
   map%map_size = ishft(keymax,map_shift)
+  map%consolidated = .False.
   
   allocate(map%map(0_8:map%map_size),stat=err)
   if (err /= 0) then
@@ -484,6 +489,7 @@ subroutine map_get(map, key, value)
   integer(map_size_kind)         :: idx_cache
   integer(cache_map_size_kind)   :: idx
   
+  ! index in tha pointers array
   idx_cache = ishft(key,map_shift)
   !DIR$ FORCEINLINE
   call cache_map_get_interval(map%map(idx_cache), key, value, 1, map%map(idx_cache)%n_elements,idx)
@@ -616,8 +622,9 @@ subroutine search_key_big_interval(key,X,sze,idx,ibegin_in,iend_in)
     
     istep = ishft(iend-ibegin,-1)
     idx = ibegin + istep
-    do while (istep > 16)
+    do while (istep > 64)
       idx = ibegin + istep
+      ! TODO : Cache misses 
       if (cache_key < X(idx)) then
         iend = idx
         istep = ishft(idx-ibegin,-1)
@@ -653,14 +660,12 @@ subroutine search_key_big_interval(key,X,sze,idx,ibegin_in,iend_in)
       endif
     enddo
     idx = ibegin
-    if (min(iend_in,sze) > ibegin+16) then
-      iend = ibegin+16
-      !DIR$ VECTOR ALIGNED
+    if (min(iend_in,sze) > ibegin+64) then
+      iend = ibegin+64
       do while (cache_key > X(idx))
         idx = idx+1
       end do
     else
-      !DIR$ VECTOR ALIGNED
       do while (cache_key > X(idx))
         idx = idx+1
         if (idx /= iend) then
@@ -725,7 +730,7 @@ subroutine search_key_value_big_interval(key,value,X,Y,sze,idx,ibegin_in,iend_in
     
     istep = ishft(iend-ibegin,-1)
     idx = ibegin + istep
-    do while (istep > 16)
+    do while (istep > 64)
       idx = ibegin + istep
       if (cache_key < X(idx)) then
         iend = idx
@@ -766,15 +771,13 @@ subroutine search_key_value_big_interval(key,value,X,Y,sze,idx,ibegin_in,iend_in
     enddo
     idx = ibegin
     value = Y(idx)
-    if (min(iend_in,sze) > ibegin+16) then
-      iend = ibegin+16
-      !DIR$ VECTOR ALIGNED
+    if (min(iend_in,sze) > ibegin+64) then
+      iend = ibegin+64
       do while (cache_key > X(idx))
         idx = idx+1
         value = Y(idx)
       end do
     else
-      !DIR$ VECTOR ALIGNED
       do while (cache_key > X(idx))
         idx = idx+1
         value = Y(idx)
@@ -848,8 +851,9 @@ subroutine get_cache_map(map,map_idx,keys,values,n_elements)
   
   n_elements = map%map(map_idx)%n_elements
   do i=1,n_elements
-    keys(i) = map%map(map_idx)%key(i) + shift
+    keys(i)   = map%map(map_idx)%key(i)   + shift
     values(i) = map%map(map_idx)%value(i)
   enddo
   
 end
+

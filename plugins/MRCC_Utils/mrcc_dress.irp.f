@@ -53,7 +53,6 @@ subroutine mrcc_dress(delta_ij_, delta_ii_, Nstates, Ndet_non_ref, Ndet_ref,i_ge
   integer :: mobiles(2), smallerlist
   logical, external :: is_generable
   
-  print *, i_generator
   leng = max(N_det_generators, N_det_non_ref)
   allocate(miniList(Nint, 2, leng), idx_minilist(leng), hij_cache(N_det_non_ref))
   
@@ -272,7 +271,7 @@ subroutine mrcc_dress(delta_ij_, delta_ii_, Nstates, Ndet_non_ref, Ndet_ref,i_ge
           !delta_ii_(i_state,i_I)  = 0.d0
           do l_sd=1,idx_alpha(0)
             k_sd = idx_alpha(l_sd)
-            delta_ij_(i_state,k_sd,i_I) = delta_ij_(i_state,k_sd,i_I) + dIa_hla(i_state,k_sd)
+            delta_ij_(i_state,k_sd,i_I) = delta_ij_(i_state,k_sd,i_I) + 0.5d0 * dIa_hla(i_state,k_sd)
           enddo
         endif
       enddo

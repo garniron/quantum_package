@@ -1,5 +1,22 @@
 use bitmasks
 
+BEGIN_PROVIDER [ character*(64), diag_algorithm ]
+  implicit none
+  BEGIN_DOC
+  ! Diagonalization algorithm (Davidson or Lapack)
+  END_DOC
+  if (N_det > N_det_max_jacobi) then
+    diag_algorithm = "Davidson"
+  else
+    diag_algorithm = "Lapack"
+  endif
+
+  if (N_det < N_states) then
+    diag_algorithm = "Lapack"
+  endif
+END_PROVIDER
+
+
 BEGIN_PROVIDER [ integer, N_det ]
  implicit none
  BEGIN_DOC
@@ -58,7 +75,7 @@ BEGIN_PROVIDER [ integer, psi_det_size ]
  else
    psi_det_size = 1
  endif
- psi_det_size = max(psi_det_size,10000)
+ psi_det_size = max(psi_det_size,100000)
  call write_int(output_determinants,psi_det_size,'Dimension of the psi arrays')
 
 END_PROVIDER
@@ -73,6 +90,7 @@ BEGIN_PROVIDER [ integer(bit_kind), psi_det, (N_int,2,psi_det_size) ]
   logical                        :: exists
   character*64                   :: label
   
+  psi_det = 0_bit_kind
   if (read_wf) then
     call ezfio_has_determinants_N_int(exists)
     if (exists) then
@@ -225,7 +243,7 @@ END_PROVIDER
 END_PROVIDER 
 
 
-BEGIN_PROVIDER [ double precision, psi_coef, (psi_det_size,N_states_diag) ]
+BEGIN_PROVIDER [ double precision, psi_coef, (psi_det_size,N_states) ]
   implicit none
   BEGIN_DOC
   ! The wave function coefficients. Initialized with Hartree-Fock if the EZFIO file
@@ -238,7 +256,7 @@ BEGIN_PROVIDER [ double precision, psi_coef, (psi_det_size,N_states_diag) ]
   character*(64)                 :: label
 
   psi_coef = 0.d0
-  do i=1,N_states_diag
+  do i=1,min(N_states,psi_det_size)
     psi_coef(i,i) = 1.d0
   enddo
 
@@ -288,6 +306,10 @@ BEGIN_PROVIDER [ double precision, psi_average_norm_contrib, (psi_det_size) ]
        psi_coef(i,k)*psi_coef(i,k)*f
    enddo
  enddo
+ f = 1.d0/sum(psi_average_norm_contrib(1:N_det))
+ do i=1,N_det
+   psi_average_norm_contrib(i) = psi_average_norm_contrib(i)*f
+ enddo
 END_PROVIDER
 
 
@@ -314,7 +336,6 @@ END_PROVIDER
    iorder(i) = i
  enddo
  call dsort(psi_average_norm_contrib_sorted,iorder,N_det)
- !DIR$ IVDEP
  do i=1,N_det
   do j=1,N_int
     psi_det_sorted(j,1,i) = psi_det(j,1,iorder(i))
@@ -417,8 +438,12 @@ end
  do i=1,N_states
    psi_coef_min(i) = minval(psi_coef(:,i))
    psi_coef_max(i) = maxval(psi_coef(:,i))
-   abs_psi_coef_min(i) = dabs(psi_coef_min(i))
-   abs_psi_coef_max(i) = dabs(psi_coef_max(i))
+   abs_psi_coef_min(i) = minval( dabs(psi_coef(:,i)) )
+   abs_psi_coef_max(i) = maxval( dabs(psi_coef(:,i)) )
+   call write_double(6,psi_coef_max(i), 'Max coef')
+   call write_double(6,psi_coef_min(i), 'Min coef')
+   call write_double(6,abs_psi_coef_max(i), 'Max abs coef')
+   call write_double(6,abs_psi_coef_min(i), 'Min abs coef')
  enddo
 
 END_PROVIDER
@@ -723,3 +748,201 @@ integer function detCmp(a,b,Nint)
 end function
 
 
+subroutine apply_excitation(det, exc, res, ok, Nint)
+  use bitmasks
+  implicit none
+  
+  integer, intent(in) :: Nint
+  integer, intent(in) :: exc(0:2,2,2)
+  integer(bit_kind),intent(in) :: det(Nint, 2)
+  integer(bit_kind),intent(out) :: res(Nint, 2)
+  logical, intent(out) :: ok
+  integer :: h1,p1,h2,p2,s1,s2,degree
+  integer :: ii, pos 
+  
+  
+  ok = .false.
+  degree = exc(0,1,1) + exc(0,1,2)
+  
+!  call decode_exc(exc,degree,h1,p1,h2,p2,s1,s2)
+! INLINE
+  select case(degree)
+    case(2)
+      if (exc(0,1,1) == 2) then
+        h1 = exc(1,1,1)
+        h2 = exc(2,1,1)
+        p1 = exc(1,2,1)
+        p2 = exc(2,2,1)
+        s1 = 1
+        s2 = 1
+      else if (exc(0,1,2) == 2) then
+        h1 = exc(1,1,2)
+        h2 = exc(2,1,2)
+        p1 = exc(1,2,2)
+        p2 = exc(2,2,2)
+        s1 = 2
+        s2 = 2
+      else
+        h1 = exc(1,1,1)
+        h2 = exc(1,1,2)
+        p1 = exc(1,2,1)
+        p2 = exc(1,2,2)
+        s1 = 1
+        s2 = 2
+      endif
+    case(1)
+      if (exc(0,1,1) == 1) then
+        h1 = exc(1,1,1)
+        h2 = 0
+        p1 = exc(1,2,1)
+        p2 = 0
+        s1 = 1
+        s2 = 0
+      else
+        h1 = exc(1,1,2)
+        h2 = 0
+        p1 = exc(1,2,2)
+        p2 = 0
+        s1 = 2
+        s2 = 0
+      endif
+    case(0)
+      h1 = 0
+      p1 = 0
+      h2 = 0
+      p2 = 0
+      s1 = 0
+      s2 = 0
+    case default
+      print *, degree
+      print *, "apply ex"
+      STOP
+  end select
+! END INLINE
+
+  res = det 
+  
+  ii = ishft(h1-1,-bit_kind_shift) + 1 
+  pos = h1-1-ishft(ii-1,bit_kind_shift)
+  if(iand(det(ii, s1), ibset(0_bit_kind, pos)) == 0_8) return
+  res(ii, s1) = ibclr(res(ii, s1), pos)
+  
+  ii = ishft(p1-1,-bit_kind_shift) + 1 
+  pos = p1-1-ishft(ii-1,bit_kind_shift)
+  if(iand(det(ii, s1), ishft(1_bit_kind, pos)) /= 0_8) return
+  res(ii, s1) = ibset(res(ii, s1), pos)
+  
+  if(degree == 2) then
+    ii = ishft(h2-1,-bit_kind_shift) + 1 
+    pos = h2-1-ishft(ii-1,bit_kind_shift)
+    if(iand(det(ii, s2), ishft(1_bit_kind, pos)) == 0_8) return
+    res(ii, s2) = ibclr(res(ii, s2), pos)
+    
+    ii = ishft(p2-1,-bit_kind_shift) + 1 
+    pos = p2-1-ishft(ii-1,bit_kind_shift)
+    if(iand(det(ii, s2), ishft(1_bit_kind, pos)) /= 0_8) return
+    res(ii, s2) = ibset(res(ii, s2), pos)
+  endif
+  ok = .true.
+end subroutine
+
+
+subroutine apply_particles(det, s1, p1, s2, p2, res, ok, Nint)
+  use bitmasks
+  implicit none
+  integer, intent(in) :: Nint
+  integer, intent(in) :: s1, p1, s2, p2
+  integer(bit_kind),intent(in) :: det(Nint, 2)
+  integer(bit_kind),intent(out) :: res(Nint, 2)
+  logical, intent(out) :: ok
+  integer :: ii, pos 
+  
+  ok = .false.
+  res = det 
+  
+  if(p1 /= 0) then
+  ii = ishft(p1-1,-bit_kind_shift) + 1 
+  pos = p1-1-ishft(ii-1,bit_kind_shift)
+  if(iand(det(ii, s1), ishft(1_bit_kind, pos)) /= 0_8) return
+  res(ii, s1) = ibset(res(ii, s1), pos)
+  end if
+
+  ii = ishft(p2-1,-bit_kind_shift) + 1 
+  pos = p2-1-ishft(ii-1,bit_kind_shift)
+  if(iand(det(ii, s2), ishft(1_bit_kind, pos)) /= 0_8) return
+  res(ii, s2) = ibset(res(ii, s2), pos)
+
+  ok = .true.
+end subroutine
+
+
+subroutine apply_holes(det, s1, h1, s2, h2, res, ok, Nint)
+  use bitmasks
+  implicit none
+  integer, intent(in) :: Nint
+  integer, intent(in) :: s1, h1, s2, h2
+  integer(bit_kind),intent(in) :: det(Nint, 2)
+  integer(bit_kind),intent(out) :: res(Nint, 2)
+  logical, intent(out) :: ok
+  integer :: ii, pos 
+  
+  ok = .false.
+  res = det 
+  
+  if(h1 /= 0) then
+  ii = ishft(h1-1,-bit_kind_shift) + 1 
+  pos = h1-1-ishft(ii-1,bit_kind_shift)
+  if(iand(det(ii, s1), ishft(1_bit_kind, pos)) == 0_8) return
+  res(ii, s1) = ibclr(res(ii, s1), pos)
+  end if
+
+  ii = ishft(h2-1,-bit_kind_shift) + 1 
+  pos = h2-1-ishft(ii-1,bit_kind_shift)
+  if(iand(det(ii, s2), ishft(1_bit_kind, pos)) == 0_8) return
+  res(ii, s2) = ibclr(res(ii, s2), pos)
+
+  ok = .true.
+end subroutine
+
+subroutine apply_particle(det, s1, p1, res, ok, Nint)
+  use bitmasks
+  implicit none
+  integer, intent(in) :: Nint
+  integer, intent(in) :: s1, p1
+  integer(bit_kind),intent(in) :: det(Nint, 2)
+  integer(bit_kind),intent(out) :: res(Nint, 2)
+  logical, intent(out) :: ok
+  integer :: ii, pos 
+  
+  ok = .false.
+  res = det 
+  
+  ii = ishft(p1-1,-bit_kind_shift) + 1 
+  pos = p1-1-ishft(ii-1,bit_kind_shift)
+  if(iand(det(ii, s1), ishft(1_bit_kind, pos)) /= 0_8) return
+  res(ii, s1) = ibset(res(ii, s1), pos)
+
+  ok = .true.
+end subroutine
+
+
+subroutine apply_hole(det, s1, h1, res, ok, Nint)
+  use bitmasks
+  implicit none
+  integer, intent(in) :: Nint
+  integer, intent(in) :: s1, h1
+  integer(bit_kind),intent(in) :: det(Nint, 2)
+  integer(bit_kind),intent(out) :: res(Nint, 2)
+  logical, intent(out) :: ok
+  integer :: ii, pos 
+  
+  ok = .false.
+  res = det 
+  
+  ii = ishft(h1-1,-bit_kind_shift) + 1 
+  pos = h1-1-ishft(ii-1,bit_kind_shift)
+  if(iand(det(ii, s1), ishft(1_bit_kind, pos)) == 0_8) return
+  res(ii, s1) = ibclr(res(ii, s1), pos)
+
+  ok = .true.
+end subroutine

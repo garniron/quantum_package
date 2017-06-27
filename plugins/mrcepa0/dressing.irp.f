@@ -521,7 +521,7 @@ END_PROVIDER
     do blok=1,cepa0_shortcut(0)
     do k=cepa0_shortcut(blok), cepa0_shortcut(blok+1)-1
       call get_excitation_degree(psi_ref(1,1,J),det_cepa0(1,1,k),degree,N_int)
-      if(degree == 2) then
+      if(degree <= 2) then
         nlink(J) += 1
         linked(nlink(J),J) = k
         child_num(k, J) = nlink(J)
@@ -609,10 +609,10 @@ END_PROVIDER
         delta_cas_s2(i,j,i_state) = 0d0
         do k=1,N_det_non_ref
 
-          call get_excitation_degree(psi_ref(1,1,j), psi_non_ref(1,1,k), degree, N_int)
-          if(degree /= 2) cycle
-          call get_excitation_degree(psi_ref(1,1,i), psi_non_ref(1,1,k), degree, N_int)
-          if(degree /= 2) cycle
+          !call get_excitation_degree(psi_ref(1,1,j), psi_non_ref(1,1,k), degree, N_int)
+          !if(degree /= 2) cycle
+          !call get_excitation_degree(psi_ref(1,1,i), psi_non_ref(1,1,k), degree, N_int)
+          !if(degree /= 2) cycle
           call i_h_j(psi_ref(1,1,j), psi_non_ref(1,1,k),N_int,Hjk)
           call get_s2(psi_ref(1,1,j), psi_non_ref(1,1,k),N_int,Sjk)
            
@@ -750,7 +750,7 @@ end subroutine
     do i=cepa0_shortcut(blok), cepa0_shortcut(blok+1)-1
       do II=1,N_det_ref
         call get_excitation_degree(psi_ref(1,1,II),psi_non_ref(1,1,det_cepa0_idx(i)),degree,N_int)
-        if (degree /= 2) cycle
+        if (degree > 2) cycle
         
         do ni=1,N_int
           made_hole(ni,1) = iand(det_ref_active(ni,1,II), xor(det_cepa0_active(ni,1,i), det_ref_active(ni,1,II)))

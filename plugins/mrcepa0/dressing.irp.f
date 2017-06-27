@@ -363,15 +363,23 @@ end
 !    end do
 !    delta_ij = delta_ij * (1.d0/dble(N_states))
 !    delta_ii = delta_ii * (1.d0/dble(N_states))
+   
+   
     ! =-=-= END STATE AVERAGE
-    !
-    !       do i = 1, N_det_ref
-    !         delta_ii(i_state,i)= delta_mrcepa0_ii(i,i_state) - delta_sub_ii(i,i_state)
-    !         do j = 1, N_det_non_ref
-    !           delta_ij(i_state,j,i) = delta_mrcepa0_ij(i,j,i_state) - delta_sub_ij(i,j,i_state)
-    !         end do
-    !       end do
-  else if(mrmode == 2) then
+  else if(mrmode == 4) then
+    do i = 1, N_det_ref
+      do i_state = 1, N_states
+        delta_ii(i_state,i)= delta_mrcepa0_ii(i,i_state) - delta_ii_old(i_state,i)
+        delta_ii_s2(i_state,i)= delta_mrcepa0_ii_s2(i,i_state) - delta_ii_s2_old(i_state,i)
+      end do
+      do j = 1, N_det_non_ref
+        do i_state = 1, N_states
+          delta_ij(i_state,j,i) = delta_mrcepa0_ij(i,j,i_state) - delta_ij_old(i_state,j,i)
+          delta_ij_s2(i_state,j,i) = delta_mrcepa0_ij_s2(i,j,i_state) - delta_ij_s2_old(i_state,j,i)
+        end do
+      end do
+    end do
+  else if(mrmode == 2 .or. mrmode == 5) then
     do i = 1, N_det_ref
       do i_state = 1, N_states
         delta_ii(i_state,i)= delta_ii_old(i_state,i)
@@ -513,7 +521,7 @@ END_PROVIDER
     do blok=1,cepa0_shortcut(0)
     do k=cepa0_shortcut(blok), cepa0_shortcut(blok+1)-1
       call get_excitation_degree(psi_ref(1,1,J),det_cepa0(1,1,k),degree,N_int)
-      if(degree <= 2) then
+      if(degree == 2) then
         nlink(J) += 1
         linked(nlink(J),J) = k
         child_num(k, J) = nlink(J)
@@ -601,9 +609,13 @@ END_PROVIDER
         delta_cas_s2(i,j,i_state) = 0d0
         do k=1,N_det_non_ref
 
+          call get_excitation_degree(psi_ref(1,1,j), psi_non_ref(1,1,k), degree, N_int)
+          if(degree /= 2) cycle
+          call get_excitation_degree(psi_ref(1,1,i), psi_non_ref(1,1,k), degree, N_int)
+          if(degree /= 2) cycle
           call i_h_j(psi_ref(1,1,j), psi_non_ref(1,1,k),N_int,Hjk)
           call get_s2(psi_ref(1,1,j), psi_non_ref(1,1,k),N_int,Sjk)
-          
+           
           delta_cas(i,j,i_state) += Hjk * dij(i, k, i_state) ! * Hki * lambda_mrcc(i_state, k)
           delta_cas_s2(i,j,i_state) += Sjk * dij(i, k, i_state) ! * Ski * lambda_mrcc(i_state, k)
         end do
@@ -738,7 +750,7 @@ end subroutine
     do i=cepa0_shortcut(blok), cepa0_shortcut(blok+1)-1
       do II=1,N_det_ref
         call get_excitation_degree(psi_ref(1,1,II),psi_non_ref(1,1,det_cepa0_idx(i)),degree,N_int)
-        if (degree > 2 ) cycle
+        if (degree /= 2) cycle
         
         do ni=1,N_int
           made_hole(ni,1) = iand(det_ref_active(ni,1,II), xor(det_cepa0_active(ni,1,i), det_ref_active(ni,1,II)))
@@ -806,6 +818,8 @@ END_PROVIDER
 
  BEGIN_PROVIDER [ double precision, delta_sub_ij, (N_det_ref,N_det_non_ref,N_states) ]
 &BEGIN_PROVIDER [ double precision, delta_sub_ii, (N_det_ref, N_states) ]
+&BEGIN_PROVIDER [ double precision, delta_sub_ij_s2, (N_det_ref,N_det_non_ref,N_states) ]
+&BEGIN_PROVIDER [ double precision, delta_sub_ii_s2, (N_det_ref, N_states) ]
   use bitmasks
   implicit none
   
@@ -813,13 +827,17 @@ END_PROVIDER
   integer                         :: p1,p2,h1,h2,s1,s2, p1_,p2_,h1_,h2_,s1_,s2_
   logical                         :: ok
   double precision                :: phase_Ji, phase_Ik, phase_Ii
-  double precision                :: contrib, contrib2, delta_IJk, HJk, HIk, HIl
+  double precision                :: contrib, contrib2, delta_IJk, HJk, HIk, HIl, SJk, SIk, SIl
   integer, dimension(0:2,2,2)     :: exc_Ik, exc_Ji, exc_Ii
   integer(bit_kind)               :: det_tmp(N_int, 2), det_tmp2(N_int, 2)
   integer, allocatable            :: idx_sorted_bit(:)
   integer, external               :: get_index_in_psi_det_sorted_bit
   
   integer :: II, blok
+  
+  double precision :: delta_IJk_s2, contrib_s2, contrib2_s2
+  
+  
   
   provide delta_cas lambda_mrcc
   allocate(idx_sorted_bit(N_det))
@@ -831,17 +849,21 @@ END_PROVIDER
   do i_state = 1, N_states
     delta_sub_ij(:,:,:) = 0d0
     delta_sub_ii(:,:) = 0d0
+    delta_sub_ij_s2(:,:,:) = 0d0
+    delta_sub_ii_s2(:,:) = 0d0
     
+
     provide mo_bielec_integrals_in_map
+    provide dij
     
-    
-    !$OMP PARALLEL DO default(none) schedule(dynamic,10) shared(delta_sub_ij, delta_sub_ii)       &
+    !$OMP PARALLEL DO default(none) schedule(dynamic,10) shared(delta_sub_ij, delta_sub_ii, delta_sub_ij_s2, delta_sub_ii_s2)       &
     !$OMP private(i, J, k, degree, degree2, l, deg, ni)       &
     !$OMP private(p1,p2,h1,h2,s1,s2, p1_,p2_,h1_,h2_,s1_,s2_)     &
     !$OMP private(ok, phase_Ji, phase_Ik, phase_Ii, contrib2, contrib, delta_IJk, HJk, HIk, HIl, exc_Ik, exc_Ji, exc_Ii) &
+    !$OMP private(delta_IJk_s2, SJk, SIk, SIl, contrib2_s2, contrib_s2) &
     !$OMP private(det_tmp, det_tmp2, II, blok)    &
     !$OMP shared(idx_sorted_bit, N_det_non_ref, N_det_ref, N_int, psi_non_ref, psi_non_ref_coef, psi_ref, psi_ref_coef)   &
-    !$OMP shared(i_state,lambda_mrcc, hf_bitmask, active_sorb)
+    !$OMP shared(dij, i_state,lambda_mrcc, hf_bitmask, active_sorb)
     do i=1,N_det_non_ref
       if(mod(i,1000) == 0) print *, i, "/", N_det_non_ref
       do J=1,N_det_ref
@@ -858,9 +880,10 @@ END_PROVIDER
           l = idx_sorted_bit(l)
           
           call i_h_j(psi_ref(1,1,II), det_tmp, N_int, HIl)
+          call get_s2(psi_ref(1,1,II), det_tmp, N_int, SIl)
           
           do k=1,N_det_non_ref
-            if(lambda_mrcc(i_state, k) == 0d0) cycle
+            !!!!if(lambda_mrcc(i_state, k) == 0d0) cycle
             call get_excitation(psi_ref(1,1,II),psi_non_ref(1,1,k),exc_Ik,degree2,phase_Ik,N_int)
             
             det_tmp(:,:) = 0_bit_kind
@@ -881,22 +904,31 @@ END_PROVIDER
             
             
             call i_h_j(psi_ref(1,1,J), psi_non_ref(1,1,k), N_int, HJk)
+            call get_s2(psi_ref(1,1,J), psi_non_ref(1,1,k), N_int, SJk)
             call i_h_j(psi_ref(1,1,II), psi_non_ref(1,1,k), N_int, HIk)
+            call get_s2(psi_ref(1,1,II), psi_non_ref(1,1,k), N_int, SIk)
             if(HJk == 0) cycle
             !assert HIk == 0
-            delta_IJk = HJk * HIk * lambda_mrcc(i_state, k)
+            delta_IJk = HJk * dij(II, k, i_state) !* HIk * lambda_mrcc(i_state, k)
+            delta_IJk_s2 = SJk * dij(II, k, i_state) !* SIk * lambda_mrcc(i_state, k)
             call apply_excitation(psi_non_ref(1,1,i),exc_Ik,det_tmp,ok,N_int)
             if(ok) cycle
-            contrib = delta_IJk * HIl * lambda_mrcc(i_state,l)   
+            contrib = delta_IJk * dij(II, l, i_state) ! * HIl * lambda_mrcc(i_state,l)
+            contrib_s2 = delta_IJk_s2 * dij(II, l, i_state) !* SIl * lambda_mrcc(i_state,l)
             if(dabs(psi_ref_coef(II,i_state)).ge.1.d-3) then
               contrib2 = contrib / psi_ref_coef(II, i_state) * psi_non_ref_coef(l,i_state)
+              contrib2_s2 = contrib_s2 / psi_ref_coef(II, i_state) * psi_non_ref_coef(l,i_state)
               !$OMP ATOMIC
               delta_sub_ii(II,i_state) -= contrib2
+              !$OMP ATOMIC
+              delta_sub_ii_s2(II,i_state) -= contrib2_s2
             else
               contrib = contrib * 0.5d0
             endif
             !$OMP ATOMIC
             delta_sub_ij(II, i, i_state) += contrib
+            !$OMP ATOMIC
+            delta_sub_ij_s2(II, i, i_state) += contrib_s2
           end do
         end do
       end do

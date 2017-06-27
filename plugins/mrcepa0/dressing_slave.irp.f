@@ -54,7 +54,8 @@ subroutine mrsc2_dressing_slave(thread,iproc)
   integer, external               :: get_index_in_psi_det_sorted_bit, searchDet, detCmp
   logical, external               :: is_in_wavefunction, isInCassd, detEq
   integer,allocatable :: komon(:)
-  logical :: komoned
+  logical :: komoned, filtered
+
   !double precision, external :: get_dij
      
   zmq_to_qp_run_socket = new_zmq_to_qp_run_socket()
@@ -94,7 +95,7 @@ subroutine mrsc2_dressing_slave(thread,iproc)
       blok = blokMwen(kk, i_I)
       
       call get_excitation(psi_ref(1,1,i_I),psi_non_ref(1,1,k),exc_Ik,degree,phase_Ik,N_int)
-    
+      !if(degree /= 2) stop "MONO"
       if(J /= i_I) then
         call apply_excitation(psi_ref(1,1,J),exc_Ik,det_tmp2,ok,N_int)
         if(.not. ok) cycle
@@ -169,13 +170,13 @@ subroutine mrsc2_dressing_slave(thread,iproc)
         i = komon(m)
         
         call apply_excitation(psi_non_ref(1,1,i),exc_Ik,det_tmp,ok,N_int)
-        if(.not. ok) cycle
-        if(HP(1,i) + HP(1,k) <= 2 .and. HP(2,i) + HP(2,k) <= 2) then
-!           if(is_in_wavefunction(det_tmp, N_int)) cycle
+        filtered = (.not. ok) .or. (HP(1,i) + HP(1,k) <= 2 .and. HP(2,i) + HP(2,k) <= 2)
+        if(mrmode == 2 .and. filtered) then
+          cycle
+        else if(mrmode == 4 .and. .not. filtered) then
           cycle
         end if
-        
-        !if(isInCassd(det_tmp, N_int)) cycle
+                !if(isInCassd(det_tmp, N_int)) cycle
           
         do i_state = 1, N_states 
           !if(lambda_mrcc(i_state, i) == 0d0) cycle

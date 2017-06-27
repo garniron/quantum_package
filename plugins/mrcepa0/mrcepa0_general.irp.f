@@ -36,6 +36,13 @@ subroutine run(N_st,energy)
     iteration = 0
     lambda = 1.d0
     do while (delta_E > thresh_mrcc)
+      print *, "HAB--"
+      print *, delta_ii(1, :N_det_ref)
+      do i=1,3
+        print *, delta_ij(1, i, :N_det_ref)
+      end do
+      print *, "--HAB"
+
       iteration += 1
       print *,  '===============================================' 
       print *,  'MRCEPA0 Iteration', iteration, '/', n_it_mrcc_max

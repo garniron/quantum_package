@@ -170,7 +170,11 @@ subroutine mrsc2_dressing_slave(thread,iproc)
         i = komon(m)
         
         call apply_excitation(psi_non_ref(1,1,i),exc_Ik,det_tmp,ok,N_int)
-        filtered = (.not. ok) .or. (HP(1,i) + HP(1,k) <= 2 .and. HP(2,i) + HP(2,k) <= 2)
+        filtered = (.not. ok)! .or. (HP(1,i) + HP(1,k) <= 2 .and. HP(2,i) + HP(2,k) <= 2)
+        if((HP(1,i) + HP(1,k) <= 2 .and. HP(2,i) + HP(2,k) <= 2)) then
+          filtered = filtered .or. (is_in_wavefunction(det_tmp, N_int))
+        end if
+
         if(mrmode == 2 .and. filtered) then
           cycle
         else if(mrmode == 4 .and. .not. filtered) then

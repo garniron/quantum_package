@@ -367,6 +367,7 @@ end
    
     ! =-=-= END STATE AVERAGE
   else if(mrmode == 4) then
+    print *, "MRSC2 SUB"
     do i = 1, N_det_ref
       do i_state = 1, N_states
         delta_ii(i_state,i)= delta_mrcepa0_ii(i,i_state) - delta_ii_old(i_state,i)

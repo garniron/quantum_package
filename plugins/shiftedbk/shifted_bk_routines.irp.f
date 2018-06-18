@@ -51,30 +51,30 @@ subroutine generator_done(i_gen, int_buf, double_buf, det_buf, N_buf, iproc)
   integer(bit_kind), intent(out) :: det_buf(N_int, 2, N_dress_det_buffer)
   integer :: i
   
-    call sort_selection_buffer(sb(iproc))
-   
-    if(sb(iproc)%cur > 0) then
-      !$OMP CRITICAL
-      call merge_selection_buffers(sb(iproc), mini_sb)
-      !call sort_selection_buffer(mini_sb)
-      do i=1,Nproc
-        mini_sb%mini = min(sb(i)%mini, mini_sb%mini)
-      end do
-      do i=1,Nproc
-        sb(i)%mini = mini_sb%mini
-      end do
-      !$OMP END CRITICAL
-    end if
-      call truncate_to_mini(sb(iproc))
-      det_buf(:,:,:sb(iproc)%cur) = sb(iproc)%det(:,:,:sb(iproc)%cur)
-      double_buf(:sb(iproc)%cur) = sb(iproc)%val(:sb(iproc)%cur)
-      double_buf(sb(iproc)%cur+1:sb(iproc)%cur+N_states) = slave_sum_alpha2(:,iproc)
-      N_buf(1) = 1
-      N_buf(2) = sb(iproc)%cur+N_states
-      N_buf(3) = sb(iproc)%cur
-    
-    sb(iproc)%cur = 0
-    slave_sum_alpha2(:,iproc) = 0d0
+!    call sort_selection_buffer(sb(iproc))
+!   
+!    if(sb(iproc)%cur > 0) then
+!      !$OMP CRITICAL
+!      call merge_selection_buffers(sb(iproc), mini_sb)
+!      !call sort_selection_buffer(mini_sb)
+!      do i=1,Nproc
+!        mini_sb%mini = min(sb(i)%mini, mini_sb%mini)
+!      end do
+!      do i=1,Nproc
+!        sb(i)%mini = mini_sb%mini
+!      end do
+!      !$OMP END CRITICAL
+!    end if
+!      call truncate_to_mini(sb(iproc))
+!      det_buf(:,:,:sb(iproc)%cur) = sb(iproc)%det(:,:,:sb(iproc)%cur)
+!      double_buf(:sb(iproc)%cur) = sb(iproc)%val(:sb(iproc)%cur)
+!      double_buf(sb(iproc)%cur+1:sb(iproc)%cur+N_states) = slave_sum_alpha2(:,iproc)
+!      N_buf(1) = 1
+!      N_buf(2) = sb(iproc)%cur+N_states
+!      N_buf(3) = sb(iproc)%cur
+!    
+!    sb(iproc)%cur = 0
+!    slave_sum_alpha2(:,iproc) = 0d0
 end subroutine
 
 
@@ -97,13 +97,13 @@ subroutine dress_pulled(ind, int_buf, double_buf, det_buf, N_buf)
   integer(bit_kind), intent(in) :: det_buf(N_int,2,*)
   integer :: i
   
-  do i=1,N_buf(3)
-    call add_to_selection_buffer(global_sb, det_buf(1,1,i), double_buf(i))
-  end do
-  if(N_buf(3) + N_states /= N_buf(2)) stop "buf size"
-  !$OMP CRITICAL
-  global_sum_alpha2(:) += double_buf(N_buf(3)+1:N_buf(2))
-  !$OMP END CRITICAL
+!  do i=1,N_buf(3)
+!    call add_to_selection_buffer(global_sb, det_buf(1,1,i), double_buf(i))
+!  end do
+!  if(N_buf(3) + N_states /= N_buf(2)) stop "buf size"
+!  !$OMP CRITICAL
+!  global_sum_alpha2(:) += double_buf(N_buf(3)+1:N_buf(2))
+!  !$OMP END CRITICAL
 end subroutine
 
 
@@ -113,20 +113,22 @@ subroutine delta_ij_done()
   integer :: i, old_det_gen
   integer(bit_kind), allocatable :: old_generators(:,:,:)
   
-  allocate(old_generators(N_int, 2, N_det_generators))
-  old_generators(:,:,:) = psi_det_generators(:,:,:N_det_generators)
-  old_det_gen = N_det_generators
+!  allocate(old_generators(N_int, 2, N_det_generators))
+!  old_generators(:,:,:) = psi_det_generators(:,:,:N_det_generators)
+!  old_det_gen = N_det_generators
  
 
-  call sort_selection_buffer(global_sb)
-  call fill_H_apply_buffer_no_selection(global_sb%cur,global_sb%det,N_int,0) 
-  call copy_H_apply_buffer_to_wf()
+!  call sort_selection_buffer(global_sb)
+!  call fill_H_apply_buffer_no_selection(global_sb%cur,global_sb%det,N_int,0) 
+!  call copy_H_apply_buffer_to_wf()
 
-  if (s2_eig.or.(N_states > 1) ) then
-    call make_s2_eigenfunction
-  endif
-  call undress_with_alpha(old_generators, old_det_gen, psi_det(1,1,N_det_delta_ij+1), N_det-N_det_delta_ij)
-  call save_wavefunction
+!  if (s2_eig.or.(N_states > 1) ) then
+!    call make_s2_eigenfunction
+!  endif
+  !call undress_with_alpha(old_generators, old_det_gen, psi_det(1,1,N_det_delta_ij+1), N_det-N_det_delta_ij)
+  !call diagonalize_CI
+  !TOUCH psi_coef
+!  call save_wavefunction
 end subroutine
 
 
@@ -254,10 +256,13 @@ subroutine dress_with_alpha_(Nstates,Ndet,Nint,delta_ij_loc,minilist, det_minili
 
   do i=1,Nstates
     de = E0_denominator(i) - haa
-    if(DABS(de) < 1D-5) cycle
+    
+    
 
+    !if(DABS(de) < 1D-5) cycle
     c_alpha(i) = a_h_psi(i) / de
-    contrib = min(contrib, c_alpha(i) * a_h_psi(i))
+    
+    !contrib = min(contrib, c_alpha(i) * a_h_psi(i))
     
     do l_sd=1,n_minilist
       hdress = c_alpha(i) * a_h_i(l_sd, iproc)
@@ -290,9 +295,31 @@ subroutine dress_with_alpha_buffer(Nstates,Ndet,Nint,delta_ij_loc, i_gen, minili
   double precision, intent(inout) :: delta_ij_loc(Nstates,N_det,2)
   double precision, external :: diag_H_mat_elem_fock
   double precision :: haa, contrib, c_alpha(N_states)
+  integer :: i
 
-
+  !!  minilist sanity check  !!
+  !integer :: ex
+  !logical :: minilisted(N_det)
+  !minilisted = .false.
   
+  !do i=1,n_minilist
+  !  minilisted(minilist(i)) = .true.
+  !end do
+  !!do i=1,N_det
+  !  call get_excitation_degree(psi_det(1,1,i), alpha, ex, N_int)
+  !  if(ex == 0) stop "not alpha.."
+  !  if(ex <= 2 .and. .not. minilisted(i)) stop "not minilisted"
+  !  if(ex > 2 .and. minilisted(i)) then
+  !    print *,"==========", i_gen, i
+  !    
+  !    call debug_det(alpha, N_int)
+  !    call debug_det(psi_det(1,1,i), N_int)
+  !    call debug_det(psi_det_sorted(1,1,i), N_int)
+  !    call debug_det(psi_det_sorted_gen(1,1,i), N_int)
+  !    stop "unlinked"
+  !  end if
+  !end do
+
   haa =  diag_H_mat_elem_fock(psi_det_generators(1,1,i_gen),alpha,fock_diag_tmp_(1,1,iproc),N_int)
   
   call dress_with_alpha_(Nstates, Ndet, Nint, delta_ij_loc, minilist, det_minilist, n_minilist, alpha, haa, contrib, c_alpha, iproc)

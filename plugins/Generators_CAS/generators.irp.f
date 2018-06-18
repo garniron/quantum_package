@@ -24,7 +24,8 @@ END_PROVIDER
 &BEGIN_PROVIDER [ double precision, psi_coef_generators, (psi_det_size,N_states) ]
 &BEGIN_PROVIDER [ integer(bit_kind), psi_det_sorted_gen, (N_int,2,psi_det_size) ]
 &BEGIN_PROVIDER [ double precision, psi_coef_sorted_gen, (psi_det_size,N_states) ]
-&BEGIN_PROVIDER [ integer, psi_det_sorted_gen_order, (psi_det_size) ]
+&BEGIN_PROVIDER [ integer, psi_det_sorted_gen_from_det_sorted, (psi_det_size) ]
+&BEGIN_PROVIDER [ integer, psi_det_sorted_from_det_sorted_gen, (psi_det_size) ]
   implicit none
   BEGIN_DOC
   ! For Single reference wave functions, the generator is the
@@ -44,7 +45,8 @@ END_PROVIDER
     good = ( number_of_holes(psi_det_sorted(1,1,i)) ==0).and.(number_of_particles(psi_det_sorted(1,1,i))==0 )
     if (good) then
       m = m+1
-      psi_det_sorted_gen_order(i) = m
+      psi_det_sorted_gen_from_det_sorted(i) = m
+      psi_det_sorted_from_det_sorted_gen(m) = i
       do k=1,N_int
         psi_det_generators(k,1,m) = psi_det_sorted(k,1,i)
         psi_det_generators(k,2,m) = psi_det_sorted(k,2,i)
@@ -59,7 +61,9 @@ END_PROVIDER
   psi_det_sorted_gen(:,:,:N_det_generators) = psi_det_generators(:,:,:N_det_generators)
   psi_coef_sorted_gen(:N_det_generators, :) = psi_coef_generators(:N_det_generators, :)
   do i=1,inongen
-    psi_det_sorted_gen_order(nongen(i)) = N_det_generators+i
+    psi_det_sorted_gen_from_det_sorted(nongen(i)) = N_det_generators+i
+    psi_det_sorted_from_det_sorted_gen(N_det_generators+i) = nongen(i)
+    
     psi_det_sorted_gen(:,:,N_det_generators+i) = psi_det_sorted(:,:,nongen(i))
     psi_coef_sorted_gen(N_det_generators+i, :) = psi_coef_sorted(nongen(i),:)
   end do

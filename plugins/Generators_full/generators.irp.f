@@ -37,8 +37,10 @@ END_PROVIDER
 
  BEGIN_PROVIDER [ integer(bit_kind), psi_det_sorted_gen, (N_int,2,psi_det_size) ]
 &BEGIN_PROVIDER [ double precision, psi_coef_sorted_gen, (psi_det_size,N_states) ]
-&BEGIN_PROVIDER [ integer, psi_det_sorted_gen_order,     (psi_det_size)  ]
-
+!&BEGIN_PROVIDER [ integer, psi_det_sorted_gen_order,     (psi_det_size)  ]
+&BEGIN_PROVIDER [ integer, psi_det_sorted_gen_from_det_sorted, (psi_det_size) ]
+&BEGIN_PROVIDER [ integer, psi_det_sorted_from_det_sorted_gen, (psi_det_size) ]
+ 
  implicit none
  BEGIN_DOC
  ! For Single reference wave functions, the generator is the
@@ -48,8 +50,12 @@ END_PROVIDER
  psi_det_sorted_gen = psi_det_sorted
  psi_coef_sorted_gen = psi_coef_sorted
  !do i=1,N_det_generators
-   psi_det_sorted_gen_order = psi_det_sorted_order
+   !psi_det_sorted_gen_order = psi_det_sorted_order
  !end do
+ do i=1,N_det_generators
+   psi_det_sorted_gen_from_det_sorted(i) = i
+   psi_det_sorted_from_det_sorted_gen(i) = i
+ end do
 END_PROVIDER
 
 

@@ -436,10 +436,10 @@ subroutine get_double_excitation(det1,det2,exc,phase,Nint)
     
   enddo
   phase = phase_dble(iand(nperm,1))
-  call get_double_excitation_ref(det1,det2,exc,refaz,Nint)
-  if(phase /= refaz) then
-    print *, "phase", phase, refaz, n, exc(0,1,1)
-  end if
+  !call get_double_excitation_ref(det1,det2,exc,refaz,Nint)
+  !if(phase == refaz) then
+  !  print *, "phase", phase, refaz, n, exc(0,1,1)
+  !end if
 end
 
 subroutine get_mono_excitation(det1,det2,exc,phase,Nint)

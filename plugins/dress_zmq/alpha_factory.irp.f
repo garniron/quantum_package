@@ -2,10 +2,10 @@ use bitmasks
 
 
 
-subroutine alpha_callback(delta_ij_loc, i_generator, subset,iproc)
+subroutine alpha_callback(delta_ij_loc, i_generator, subset, csubset, iproc)
   use bitmasks
   implicit none
-  integer, intent(in)            :: i_generator, subset
+  integer, intent(in)            :: i_generator, subset, csubset
   double precision,intent(inout) :: delta_ij_loc(N_states,N_det,2) 
   integer, intent(in)            :: iproc
   
@@ -15,7 +15,7 @@ subroutine alpha_callback(delta_ij_loc, i_generator, subset,iproc)
 
 
   do l=1,N_generators_bitmask
-    call generate_singles_and_doubles(delta_ij_loc, i_generator,l,subset,iproc)
+    call generate_singles_and_doubles(delta_ij_loc,i_generator,l,subset,csubset,iproc)
   enddo
 end subroutine
 
@@ -34,7 +34,7 @@ BEGIN_PROVIDER [ integer, psi_from_sorted_gen, (N_det) ]
 END_PROVIDER
 
 
-subroutine generate_singles_and_doubles(delta_ij_loc, i_generator, bitmask_index, subset, iproc)
+subroutine generate_singles_and_doubles(delta_ij_loc, i_generator, bitmask_index, subset, csubset, iproc)
   use bitmasks
   implicit none
   BEGIN_DOC
@@ -42,7 +42,7 @@ subroutine generate_singles_and_doubles(delta_ij_loc, i_generator, bitmask_index
   END_DOC
   
   double precision,intent(inout) :: delta_ij_loc(N_states,N_det,2) 
-  integer, intent(in)            :: i_generator, subset, bitmask_index
+  integer, intent(in)            :: i_generator, subset, csubset, bitmask_index
   integer, intent(in)            :: iproc
 
   
@@ -69,7 +69,6 @@ subroutine generate_singles_and_doubles(delta_ij_loc, i_generator, bitmask_index
   allocate(abuf(N_det*6), labuf(N_det))
   allocate(preinteresting_det(N_int,2,N_det))
   
-  PROVIDE fragment_count
   
     
   monoAdo = .true.
@@ -345,7 +344,7 @@ subroutine generate_singles_and_doubles(delta_ij_loc, i_generator, bitmask_index
           end if
 
           maskInd += 1
-          if(subset == 0 .or. mod(maskInd, fragment_count) == (subset-1)) then  
+          if(mod(maskInd, csubset) == (subset-1)) then  
             
             call spot_isinwf(mask, fullminilist, i_generator, fullinteresting(0), banned, fullMatch, fullinteresting)
             if(fullMatch) cycle

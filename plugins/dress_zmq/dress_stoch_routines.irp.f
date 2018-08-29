@@ -1,17 +1,182 @@
-BEGIN_PROVIDER [ integer, fragment_first ]
+BEGIN_PROVIDER [ integer, dress_stoch_istate ]
   implicit none
-  fragment_first = first_det_of_teeth(1)
+  dress_stoch_istate = 1
+END_PROVIDER
+
+ BEGIN_PROVIDER [ integer, pt2_N_teeth ]
+&BEGIN_PROVIDER [ integer, pt2_minDetInFirstTeeth ]
+&BEGIN_PROVIDER [ integer, pt2_n_tasks_max ]
+&BEGIN_PROVIDER [ integer, pt2_F, (N_det_generators) ]
+  implicit none
+  pt2_F(:) = 1
+  pt2_F(:N_det_generators/100 + 1) = 1
+  pt2_n_tasks_max = N_det_generators/100 + 1
+  
+  if(N_det_generators < 256) then
+    pt2_minDetInFirstTeeth = 1
+    pt2_N_teeth = 1
+  else
+    pt2_minDetInFirstTeeth = 5
+    pt2_N_teeth = 16
+  end if
 END_PROVIDER
 
 
-subroutine ZMQ_dress(E, dress, delta_out, delta_s2_out, relative_error, lndet)
+
+BEGIN_PROVIDER [ integer, dress_N_cp_max ]
+  dress_N_cp_max = 100
+END_PROVIDER
+
+BEGIN_PROVIDER[ integer, dress_M_m, (dress_N_cp_max)]
+  implicit none
+  integer :: i
+  
+  do i=1,dress_N_cp_max-1
+    dress_M_m(i) = N_det_generators * i / (dress_N_cp_max+1)
+  end do
+  dress_M_m(1) = 1
+  dress_M_m(dress_N_cp_max) = N_det_generators+1
+END_PROVIDER
+
+
+
+ BEGIN_PROVIDER[ integer, pt2_J, (N_det_generators)]
+&BEGIN_PROVIDER[ double precision, pt2_u, (N_det_generators)]
+&BEGIN_PROVIDER[ integer, dress_R, (0:N_det_generators)]
+&BEGIN_PROVIDER[ integer, dress_R1, (0:N_det_generators)]
+&BEGIN_PROVIDER[ double precision, dress_M_mi, (dress_N_cp_max, N_det_generators+1)]
+&BEGIN_PROVIDER [ integer, dress_P, (N_det_generators) ]
+&BEGIN_PROVIDER [ integer, dress_T, (N_det_generators) ]
+&BEGIN_PROVIDER [ integer, dress_N_cp ]
+  implicit none
+  integer :: N_c, N_j, U, t, i, m
+  double precision :: v
+  double precision, allocatable :: tilde_M(:)
+  logical, allocatable :: d(:)
+  integer, external :: dress_find_sample
+  
+  allocate(d(N_det_generators), tilde_M(N_det_generators))
+  
+  dress_M_mi = 0d0
+  tilde_M = 0d0
+  dress_R(:) = 0
+  dress_R1(:) = 0
+  N_c = 0
+  N_j = pt2_n_0(1)
+  d(:) = .false.
+
+  do i=1,N_j
+      d(i) = .true.
+      pt2_J(i) = i
+  end do
+  call random_seed(put=(/3211,64,6566,321,65,321,654,65,321,6321,654,65,321,621,654,65,321,65,654,65,321,65/)) 
+  call RANDOM_NUMBER(pt2_u)
+  call RANDOM_NUMBER(pt2_u)
+  
+  U = 0
+  
+  m = 1
+  do while(N_j < N_det_generators)
+    !ADD_COMB
+    N_c += 1
+    do t=0, pt2_N_teeth-1
+      v = pt2_u_0 + pt2_W_T * (dble(t) + pt2_u(N_c))
+      i = dress_find_sample(v, pt2_cW)
+      tilde_M(i) += 1d0
+      if(.not. d(i)) then
+        N_j += 1
+        pt2_J(N_j) = i
+        d(i) = .true.
+      end if
+    end do
+   
+    !FILL_TOOTH
+    do while(U < N_det_generators)
+      U += 1
+      if(.not. d(U)) then
+        N_j += 1
+        pt2_J(N_j) = U
+        d(U) = .true.
+        exit;
+      end if
+    end do
+    
+    if(N_c == dress_M_m(m)) then
+      dress_R1(m) = N_j
+      dress_R(N_j) = N_c
+      dress_M_mi(m, :N_det_generators) = tilde_M(:)
+      m += 1
+    end if
+  enddo
+  
+  dress_N_cp = m-1
+  dress_R1(dress_N_cp) = N_j
+  
+  !!!!!!!!!!!!!!
+  do m=1,dress_N_cp
+    do i=dress_R1(m-1)+1, dress_R1(m)
+      dress_P(pt2_J(i)) = m
+    end do
+  end do
+  
+  do i=1, pt2_n_0(1)
+    dress_T(i) = 0
+  end do
+  
+  do t=2,pt2_N_teeth+1
+    do i=pt2_n_0(t-1)+1, pt2_n_0(t)
+      dress_T(i) = t-1
+    end do
+  end do
+  !!!!!!!!!!!!!
+  
+END_PROVIDER
+
+
+! BEGIN_PROVIDER [double precision, dress_e, (N_det_generators, dress_N_cp)]
+!&BEGIN_PROVIDER [integer, dress_dot_t, (0:dress_N_cp)]
+!&BEGIN_PROVIDER [integer, dress_dot_n_0, (0:dress_N_cp)]
+!  implicit none
+!  dress_e(:,:) = 1d0
+!  dress_dot_t(:) = 0
+!  dress_dot_n_0(:) = 0
+!  
+!  integer :: U, m, t, i
+!  
+!  U = pt2_n_0(1)+1
+ ! 
+!  do m=1,dress_N_cp
+!    do while(dress_M_mi(m, U) /= 0d0)
+!      U = U+1
+!    end do
+ !   dress_dot_t(m) = pt2_N_teeth + 1
+ !   dress_dot_n_0(m) = N_det_generators
+ !!   
+ !   do t = 2, pt2_N_teeth+1
+ !     if(U <= pt2_n_0(t)) then
+ !       dress_dot_t(m) = t-1
+!        dress_dot_n_0(m) = pt2_n_0(t-1)
+!        exit
+!      end if
+!    end do
+!    do t=dress_dot_t(m), pt2_N_teeth
+!      do i=pt2_n_0(t)+1, pt2_n_0(t+1)
+!        dress_e(i,m) = pt2_W_T * dress_M_mi(m,i) / pt2_w(i)
+ !     end do
+ !   end do
+ ! end do
+!  do m=dress_N_cp, 2, -1
+!    dress_e(:,m) -= dress_e(:,m-1)
+!  end do
+!END_PROVIDER
+
+
+subroutine ZMQ_dress(E, dress, delta_out, delta_s2_out, relative_error)
   use f77_zmq
   
   implicit none
   
-  integer, intent(in) :: lndet
   character(len=64000)           :: task
-  character(len=3200)            :: temp 
   integer(ZMQ_PTR)               :: zmq_to_qp_run_socket, zmq_socket_pull
   integer, external              :: omp_get_thread_num
   double precision, intent(in)   :: E(N_states), relative_error
@@ -24,12 +189,9 @@ subroutine ZMQ_dress(E, dress, delta_out, delta_s2_out, relative_error, lndet)
   
   integer                        :: i, j, k, Ncp
   
-  double precision, external     :: omp_get_wtime
-  double precision               :: time
   integer, external              :: add_task_to_taskserver
   double precision               :: state_average_weight_save(N_states)
   task(:) = CHAR(0)
-  temp(:) = CHAR(0)
   allocate(delta(N_states,N_det), delta_s2(N_states, N_det))
   state_average_weight_save(:) = state_average_weight(:)
   do dress_stoch_istate=1,N_states
@@ -39,7 +201,7 @@ subroutine ZMQ_dress(E, dress, delta_out, delta_s2_out, relative_error, lndet)
     TOUCH state_average_weight
     
     !provide psi_coef_generators
-    provide nproc fragment_first fragment_count mo_bielec_integrals_in_map mo_mono_elec_integral dress_weight psi_selectors
+    provide nproc mo_bielec_integrals_in_map mo_mono_elec_integral psi_selectors
     !print *, dress_e0_denominator
     
     print *, '========== ================= ================= ================='
@@ -75,59 +237,15 @@ subroutine ZMQ_dress(E, dress, delta_out, delta_s2_out, relative_error, lndet)
 
 
     integer(ZMQ_PTR), external     :: new_zmq_to_qp_run_socket
-    integer                        :: ipos, sz
-    integer                        :: block(1), block_i, cur_tooth_reduce, ntas
-    logical                        :: flushme
-    block = 0
-    block_i = 0
-    cur_tooth_reduce = 0
-    ipos=1
-    ntas = 0
-    do i=1,N_dress_jobs+1
-      flushme = (i==N_dress_jobs+1 .or. block_i == size(block) .or. block_i >=cur_tooth_reduce )
-      if(.not. flushme) flushme = (tooth_reduce(dress_jobs(i)) == 0 .or. tooth_reduce(dress_jobs(i)) /= cur_tooth_reduce)
-      
-      if(flushme .and. block_i > 0) then
-        if(block(1) > fragment_first) then
-          ntas += 1
-          write(temp, '(I9,1X,60(I9,1X))') 0, block(:block_i)
-          sz = len(trim(temp))+1
-          temp(sz:sz) = '|'
-          !write(task(ipos:ipos+20),'(I9,1X,I9,''|'')') 0, dress_jobs(i)
-          write(task(ipos:ipos+sz), *) temp(:sz)
-          !ipos += 20
-          ipos += sz+1
-          if (ipos > 63000 .or. i==N_dress_jobs+1) then
-            if (add_task_to_taskserver(zmq_to_qp_run_socket,trim(task(1:ipos))) == -1) then
-              stop 'Unable to add task to task server'
-            endif
-          
-            ipos=1
-          endif
-        else
-          if(block_i /= 1) stop "reduced fragmented dets"
-          do j=1,fragment_count
-            ntas += 1
-            write(task(ipos:ipos+20),'(I9,1X,I9,''|'')') j, block(1)
-            ipos += 20
-            if (ipos > 63000 .or. i==N_dress_jobs+1) then
-              ntas += 1
-              if (add_task_to_taskserver(zmq_to_qp_run_socket,trim(task(1:ipos))) == -1) then
-                stop 'Unable to add task to task server'
-              endif
-              ipos=1
-            endif
-          end do
-        end if
-        block_i = 0
-        block = 0
-      end if
-      
-      if(i /= N_dress_jobs+1) then
-        cur_tooth_reduce = tooth_reduce(dress_jobs(i))
-        block_i += 1
-        block(block_i) = dress_jobs(i)
-      end if
+
+
+    do i=1,N_det_generators
+      do j=1,pt2_F(i) !!!!!!!!!!!! 
+        write(task(1:20),'(I9,1X,I9''|'')') j, pt2_J(i)
+        if (add_task_to_taskserver(zmq_to_qp_run_socket,trim(task(1:20))) == -1) then
+          stop 'Unable to add task to task server'
+        endif
+      end do
     end do
     if (zmq_set_running(zmq_to_qp_run_socket) == -1) then
       print *,  irp_here, ': Failed in zmq_set_running'
@@ -164,6 +282,54 @@ subroutine dress_slave_inproc(i)
   call run_dress_slave(1,i,dress_e0_denominator)
 end
 
+ BEGIN_PROVIDER [double precision, dress_e, (N_det_generators, dress_N_cp)]
+&BEGIN_PROVIDER [integer, dress_dot_t, (0:dress_N_cp)]
+&BEGIN_PROVIDER [integer, dress_dot_n_0, (0:dress_N_cp)] 
+&BEGIN_PROVIDER [integer, dress_dot_F, (dress_N_cp)]
+  implicit none
+  
+  logical, allocatable :: d(:)
+  integer :: U, m, t, i
+  
+  allocate(d(N_det_generators+1))
+
+  dress_e(:,:) = 1d0
+  dress_dot_t(:) = 0
+  dress_dot_n_0(:) = 0
+  dress_dot_F = 0
+  d(:) = .false.
+  U=0
+  
+  do m=1,dress_N_cp
+    do i=dress_R1(m-1)+1,dress_R1(m)
+      dress_dot_F(m) += pt2_F(pt2_J(i))
+      d(pt2_J(i)) = .true.
+    end do
+
+    do while(d(U+1))
+      U += 1
+    end do
+      
+    dress_dot_t(m) = pt2_N_teeth + 1
+    dress_dot_n_0(m) = N_det_generators
+    
+    do t = 2, pt2_N_teeth+1
+      if(U < pt2_n_0(t)) then
+        dress_dot_t(m) = t-1
+        dress_dot_n_0(m) = pt2_n_0(t-1)
+        exit
+      end if
+    end do
+    do t=dress_dot_t(m), pt2_N_teeth
+      do i=pt2_n_0(t)+1, pt2_n_0(t+1)
+        dress_e(i,m) = pt2_W_T * dress_M_mi(m,i) / pt2_w(i)
+      end do
+    end do
+  end do
+  do m=dress_N_cp, 2, -1
+    dress_e(:,m) -= dress_e(:,m-1)
+  end do
+END_PROVIDER
 
 
 subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, dress, istate)
@@ -181,147 +347,102 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
 
   double precision, intent(out)  :: delta(N_states, N_det)
   double precision, intent(out)  :: delta_s2(N_states, N_det)
-  double precision, allocatable  :: delta_loc(:,:,:)
-  double precision, allocatable  :: dress_detail(:,:)
-  double precision               :: dress_mwen(N_states)
+  double precision, allocatable  :: breve_delta_m(:,:,:), S(:), S2(:)
+  double precision, allocatable  :: edI(:,:), edI_task(:,:)
+  integer, allocatable           :: edI_index(:)
   integer(ZMQ_PTR),external      :: new_zmq_to_qp_run_socket
   integer(ZMQ_PTR)               :: zmq_to_qp_run_socket
 
   integer(ZMQ_PTR), external     :: new_zmq_pull_socket
-
   integer :: more
-  integer :: i, j, k, i_state, N
-  integer :: task_id, ind
-  double precision, save :: time0 = -1.d0
-  double precision :: time
+  integer :: i, c, j, k, f, t, m, p, m_task
+  integer :: task_id, n_tasks
+  double precision :: E0, error, x, v, time, time0
+  double precision :: avg, eqt
   double precision, external :: omp_get_wtime
-  integer :: cur_cp, last_cp
-  integer :: delta_loc_cur, is, N_buf(3)
-  integer, allocatable :: int_buf(:), agreg_for_cp(:)
-  double precision, allocatable :: double_buf(:)
-  integer(bit_kind), allocatable :: det_buf(:,:,:)
-  integer, external :: zmq_delete_tasks
-  last_cp = 10000000
-  allocate(agreg_for_cp(N_cp))
-  agreg_for_cp = 0
-  allocate(int_buf(N_dress_int_buffer), double_buf(N_dress_double_buffer), det_buf(N_int,2,N_dress_det_buffer))
-  delta_loc_cur = 1
+  integer, allocatable :: dot_f(:)
+  integer, external :: zmq_delete_tasks, dress_find_sample
 
   delta = 0d0
   delta_s2 = 0d0
-  allocate(cp(N_states, N_det, N_cp, 2), dress_detail(N_states, N_det))
-  allocate(delta_loc(N_states, N_det, 2))
-  dress_detail = -1000d0
+  allocate(cp(N_states, N_det, dress_N_cp, 2), edI(N_states, N_det))
+  allocate(edI_task(N_states, N_det), edI_index(N_det))
+  allocate(breve_delta_m(N_states, N_det, 2))
+  allocate(dot_f(dress_N_cp))
+  allocate(S(pt2_N_teeth+1), S2(pt2_N_teeth+1))
+  edI = -100000d0
+  
   cp = 0d0
-  character*(512) :: task
+  dot_f(:) = dress_dot_F(:)
 
   zmq_to_qp_run_socket = new_zmq_to_qp_run_socket()
   more = 1
-  if (time0 < 0.d0) then
-      call wall_time(time0)
-  endif
-  logical :: loop, floop
-
-  floop = .true.
-  loop = .true.
-
-  pullLoop : do while (loop)
-    call pull_dress_results(zmq_socket_pull, ind, cur_cp, delta_loc, int_buf, double_buf, det_buf, N_buf, task_id, dress_mwen)
-    !print *, cur_cp, ind
-    if(floop) then
-      call wall_time(time)
-      print *, "first_pull", time-time0
-      time0 = time
-      floop = .false.
-    end if
-    if(cur_cp == -1 .and. ind == N_det_generators) then
-      call wall_time(time)
-    end if
-    
-    
-    if(cur_cp == -1) then
-      call dress_pulled(ind, int_buf, double_buf, det_buf, N_buf) 
-      if (zmq_delete_tasks(zmq_to_qp_run_socket,zmq_socket_pull,task_id,1,more) == -1) then
-        stop 'Unable to delete tasks'
-      endif
-      if(more == 0)  loop = .false. !stop 'loop = .false.' !!!!!!!!!!!!!!!!
-      dress_detail(:, ind) = dress_mwen(:)
-      !print *, "DETAIL", ind, dress_mwen
-    else if(cur_cp > 0) then
-      if(ind == 0) cycle
-      !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(i)
-      do i=1,N_det
-        cp(:,i,cur_cp,1) += delta_loc(:,i,1)
+  m = 1
+  c = 0
+  S(:) = 0d0
+  S2(:) = 0d0
+  time0 = omp_get_wtime()
+  do while (m <= dress_N_cp)
+    if(dot_f(m) == 0) then
+      E0 = 0
+      do i=dress_dot_n_0(m),1,-1
+        E0 += edI(dress_stoch_istate, i)
       end do
-
-      !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(i)
-      do i=1,N_det
-        cp(:,i,cur_cp,2) += delta_loc(:,i,2)
+      do while(c < dress_M_m(m))
+        c = c+1
+        x = 0d0
+        do p=pt2_N_teeth, 1, -1
+          v = pt2_u_0 + pt2_W_T * (pt2_u(c) + dble(p-1))
+          i = dress_find_sample(v, pt2_cW)
+          x += edI(dress_stoch_istate, i) * pt2_W_T / pt2_w(i)
+          S(p) += x
+          S2(p) += x**2
+        end do
       end do
-      !$OMP END PARALLEL DO
-      agreg_for_cp(cur_cp) += ind
-      !print *, agreg_for_cp(cur_cp), ind,  needed_by_cp(cur_cp), cur_cp
-      if(agreg_for_cp(cur_cp) > needed_by_cp(cur_cp)) then
-        stop "too much results..."
-      end if
-      if(agreg_for_cp(cur_cp) /= needed_by_cp(cur_cp)) cycle
-
-      call wall_time(time)
+        t = dress_dot_t(m)
+        avg = S(t) / dble(c)
+        eqt = (S2(t) / c) - (S(t)/c)**2
+        eqt = sqrt(eqt / dble(c-1))
+        error = eqt
+        time = omp_get_wtime()
+        print '(G10.3, 2X, F16.10, 2X, G16.3, 2X, F16.4, A20)', c, avg+E0+E(dress_stoch_istate), eqt, time-time0, ''
+      !end do
+      m += 1
+    else
+      task_id = 0
+      do
+        call  pull_dress_results(zmq_socket_pull, m_task, f, edI_task, edI_index, breve_delta_m, task_id, n_tasks)
+        if(task_id == 0) exit
+        if (zmq_delete_tasks(zmq_to_qp_run_socket,zmq_socket_pull,task_id,n_tasks,more) == -1) then
+          stop 'Unable to delete tasks'
+        endif
+      end do
+      do i=1,n_tasks
+        edI(:, edI_index(i)) = edI_task(:, i) !!!!!!!!!!!!!!! += !!!!!
+      end do
+      cp(:,:,m_task,1) += breve_delta_m(:,:,1)
+      cp(:,:,m_task,2) += breve_delta_m(:,:,2)
       
-      last_cp = cur_cp
-      double precision :: su, su2, eqt, avg, E0, val
-      integer, external :: zmq_abort
-
-      su  = 0d0
-      su2 = 0d0
-      !$OMP PARALLEL DO DEFAULT(NONE) PRIVATE(i, val) SHARED(comb, dress_detail, &
-      !$OMP cur_cp,istate,cps_N) REDUCTION(+:su) REDUCTION(+:su2)
-      do i=1, int(cps_N(cur_cp))
-        call get_comb_val(comb(i), dress_detail, cur_cp, val, istate)
-        su  += val
-        su2 += val*val
-      end do
-      !$OMP END PARALLEL DO
-      
-      avg = su / cps_N(cur_cp)
-      eqt = dsqrt( ((su2 / cps_N(cur_cp)) - avg*avg) / cps_N(cur_cp) )
-      E0 = sum(dress_detail(istate, :first_det_of_teeth(cp_first_tooth(cur_cp))-1))
-      if(cp_first_tooth(cur_cp) <= comb_teeth) then
-        E0 = E0 + dress_detail(istate, first_det_of_teeth(cp_first_tooth(cur_cp))) * (1d0-fractage(cp_first_tooth(cur_cp)))
-      end if
-
-      !print '(I2X, F16.7, 2X, G16.3, 2X, F16.4, A20)', avg+E(istate)+E0, eqt, time-time0, ''
-       print '(G10.3, 2X, F16.10, 2X, G16.3, 2X, F16.4, A20)', cps_N(cur_cp), avg+E0+E(istate), eqt, time-time0, ''
-      if ((dabs(eqt) < relative_error .and. cps_N(cur_cp) >= 30)) then
-        ! Termination
-        print *, "TERMINATE"
-        if (zmq_abort(zmq_to_qp_run_socket) == -1) then
-          call sleep(1)
-          if (zmq_abort(zmq_to_qp_run_socket) == -1) then
-            print *, irp_here, ': Error in sending abort signal (2)'
-          endif
-        endif                 
-      endif
+      dot_f(m_task) -= f
     end if
-  end do pullLoop
+  end do
 
-  delta(:,:) = cp(:,:,last_cp,1)
-  delta_s2(:,:) = cp(:,:,last_cp,2)
+  delta(:,:) = cp(:,:,m-1,1)
+  delta_s2(:,:) = cp(:,:,m-1,2)
 
   dress(istate) = E(istate)+E0+avg
   call end_zmq_to_qp_run_socket(zmq_to_qp_run_socket)
 end subroutine
 
 
-integer function dress_find(v, w, sze, imin, imax)
+integer function dress_find_sample(v, w)
   implicit none
-  integer, intent(in) :: sze, imin, imax
-  double precision, intent(in) :: v, w(sze)
+  double precision, intent(in) :: v, w(0:N_det_generators)
   integer :: i,l,h
   integer, parameter :: block=64
 
-  l = imin
-  h = imax-1
+  l = 0
+  h = N_det_generators
 
   do while(h-l >= block)
     i = ishft(h+l,-1)
@@ -332,399 +453,71 @@ integer function dress_find(v, w, sze, imin, imax)
     end if
   end do
   !DIR$ LOOP COUNT (64)
-  do dress_find=l,h
-    if(w(dress_find) >= v) then
+  do dress_find_sample=l,h
+    if(w(dress_find_sample) >= v) then
       exit
     end if
   end do
 end function
 
 
- BEGIN_PROVIDER [ integer, gen_per_cp ]
-&BEGIN_PROVIDER [ integer, comb_teeth ]
-&BEGIN_PROVIDER [ integer, N_cps_max ]
+
+ BEGIN_PROVIDER [ double precision,     pt2_w, (N_det_generators) ] 
+&BEGIN_PROVIDER [ double precision,     pt2_cW, (0:N_det_generators) ] 
+&BEGIN_PROVIDER [ double precision,     pt2_W_T ]
+&BEGIN_PROVIDER [ double precision,     pt2_u_0 ]
+&BEGIN_PROVIDER [ integer,              pt2_n_0, (pt2_N_teeth+1) ]
   implicit none
-  BEGIN_DOC
-! N_cps_max : max number of checkpoints
-!
-! gen_per_cp : number of generators per checkpoint
-  END_DOC
-  comb_teeth = 64
-  N_cps_max = 16
-  gen_per_cp = (N_det_generators / N_cps_max) + 1
-END_PROVIDER
+  integer :: i, t
+  double precision, allocatable :: tilde_w(:), tilde_cW(:)
+  double precision :: r, tooth_width
+  integer, external :: dress_find_sample
 
-
- BEGIN_PROVIDER [ integer, N_cp ]
-&BEGIN_PROVIDER [ double precision, cps_N, (N_cps_max) ]
-&BEGIN_PROVIDER [ integer, cp_first_tooth, (N_cps_max) ]
-&BEGIN_PROVIDER [ integer, done_cp_at, (N_det_generators) ]
-&BEGIN_PROVIDER [ integer, done_cp_at_det, (N_det_generators) ]
-&BEGIN_PROVIDER [ integer, needed_by_cp, (0:N_cps_max) ]
-&BEGIN_PROVIDER [ double precision, cps, (N_det_generators, N_cps_max) ]
-&BEGIN_PROVIDER [ integer, N_dress_jobs ]
-&BEGIN_PROVIDER [ integer, dress_jobs, (N_det_generators) ]
-&BEGIN_PROVIDER [ double precision, comb, (N_det_generators) ]
-&BEGIN_PROVIDER [ integer, tooth_reduce, (N_det_generators) ]
-  implicit none
-  logical, allocatable         :: computed(:), comp_filler(:)
-  integer                        :: i, j, last_full, dets(comb_teeth)
+  allocate(tilde_w(N_det_generators), tilde_cW(0:N_det_generators))
   
-  integer                        :: k, l, cur_cp, under_det(comb_teeth+1)
-  integer :: cp_limit(N_cps_max)
-  integer, allocatable :: iorder(:), first_cp(:)
-  integer, allocatable :: filler(:)
-  integer :: nfiller, lfiller, cfiller
-  logical :: fracted
-   
-  integer :: first_suspect
-  provide psi_coef_generators
-  first_suspect = 1
-
-  allocate(filler(n_det_generators))
-  allocate(iorder(N_det_generators), first_cp(N_cps_max+1))
-  allocate(computed(N_det_generators))
-  allocate(comp_filler(N_det_generators))
-  first_cp = 1
-  cps = 0d0
-  cur_cp = 1
-  done_cp_at = 0
-  done_cp_at_det = 0
-  needed_by_cp = 0
-  comp_filler = .false.
-  computed = .false.
-  cps_N = 1d0
-  tooth_reduce = 0
+  tilde_cW(0) = 0d0
   
-  integer :: fragsize
-  fragsize = N_det_generators / ((N_cps_max-1+1)*(N_cps_max-1+2)/2)
-
-  do i=1,N_cps_max
-    cp_limit(i) = fragsize * i * (i+1) / 2
-  end do
-  cp_limit(N_cps_max) = N_det*2
-
-  N_dress_jobs = first_det_of_comb - 1
-  do i=1, N_dress_jobs
-    dress_jobs(i) = i
-    computed(i) = .true.
-  end do
-  
-  l=first_det_of_comb
-  call random_seed(put=(/321,654,65,321,65,321,654,65,321,6321,654,65,321,621,654,65,321,65,654,65,321,65/))
-  call RANDOM_NUMBER(comb)
-  lfiller = 1
-  nfiller = 1
   do i=1,N_det_generators
-    !print *, i, N_dress_jobs
-    comb(i) = comb(i) * comb_step
-    !DIR$ FORCEINLINE
-    call add_comb(comb(i), computed, cps(1, cur_cp), N_dress_jobs, dress_jobs)
-    
-    !if(N_dress_jobs / gen_per_cp > (cur_cp-1) .or. N_dress_jobs == N_det_generators) then
-    if(N_dress_jobs > cp_limit(cur_cp) .or. N_dress_jobs == N_det_generators) then
-      first_cp(cur_cp+1) = N_dress_jobs
-      done_cp_at(N_dress_jobs) = cur_cp
-      cps_N(cur_cp) = dfloat(i)
-      if(N_dress_jobs /= N_det_generators) then
-        cps(:, cur_cp+1) = cps(:,  cur_cp)
-        cur_cp += 1
-      end if
-      
-      if (N_dress_jobs == N_det_generators) then
-        exit
-      end if
-    end if
-
-    !!!!!!!!!!!!!!!!!!!!!!!!
-    if(.TRUE.) then 
-    do l=first_suspect,N_det_generators
-      if((.not. computed(l))) then
-        N_dress_jobs+=1
-        dress_jobs(N_dress_jobs) = l
-        computed(l) = .true.
-        first_suspect = l
-        exit
-      end if
-    end do
-    
-    if (N_dress_jobs == N_det_generators) exit
-
-   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    ELSE
-   !!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    do l=first_suspect,N_det_generators
-      if((.not. computed(l)) .and. (.not. comp_filler(l))) exit
-    end do
-    first_suspect = l
-    if(l > N_det_generators) cycle
-    
-    cfiller = tooth_of_det(l)-1
-    if(cfiller > lfiller) then
-      do j=1,nfiller-1
-        if(.not. computed(filler(j))) then
-          k=N_dress_jobs+1
-          dress_jobs(k) = filler(j)
-          N_dress_jobs = k
-        end if  
-        computed(filler(j)) = .true.
-      end do
-      nfiller = 2
-      filler(1) = l
-      lfiller = cfiller
-    else
-      filler(nfiller) = l
-      nfiller += 1
-    end if
-    comp_filler(l) = .True.
-    end if
-    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    tilde_w(i)  = psi_coef_generators(i,dress_stoch_istate)**2
+    tilde_cW(i) = tilde_cW(i-1) + tilde_w(i)
   enddo
-
   
-  do j=1,nfiller-1
-     if(.not. computed(filler(j)))then
-       k=N_dress_jobs+1
-       dress_jobs(k) = filler(j)
-       N_dress_jobs = k
-     end if
-     computed(filler(j)) = .true.
-  end do
-
-
-  N_cp = cur_cp
-  
-  if(N_dress_jobs /= N_det_generators .or. N_cp > N_cps_max) then
-    print *, N_dress_jobs, N_det_generators, N_cp, N_cps_max
-    stop "error in jobs creation"
-  end if
-
-  cur_cp = 0
-  do i=1,N_dress_jobs
-    if(done_cp_at(i) /= 0) cur_cp = done_cp_at(i)
-    done_cp_at(i) = cur_cp
-    done_cp_at_det(dress_jobs(i)) = cur_cp
-    needed_by_cp(cur_cp) += 1
-  end do
-  
-
-  under_det = 0
-  cp_first_tooth = 0
-  do i=1,N_dress_jobs
-    do j=comb_teeth+1,1,-1
-      if(dress_jobs(i) <= first_det_of_teeth(j)) then
-        under_det(j) = under_det(j) + 1
-        if(under_det(j) == first_det_of_teeth(j))then
-          do l=done_cp_at(i)+1, N_cp
-            cps(:first_det_of_teeth(j)-1, l) = 0d0
-            cp_first_tooth(l) = j
-          end do
-          cps(first_det_of_teeth(j), done_cp_at(i)+1) = &
-              cps(first_det_of_teeth(j), done_cp_at(i)+1) * fractage(j)
-        end if
-      else
-        exit
-      end if
-    end do
-  end do
-  cp_first_tooth(N_cp) = comb_teeth+1
-  
-  do i=1,N_det_generators
-    do j=N_cp,2,-1
-      cps(i,j) -= cps(i,j-1)
-    end do
-  end do
-
-  iorder = -1
-
-  cps(:, N_cp) = 0d0 
-
-  iloop : do i=fragment_first+1,N_det_generators
-    k = tooth_of_det(i)
-    if(k == 0) cycle
-    if (i == first_det_of_teeth(k)) cycle
-    
-    do j=1,N_cp
-     if(cps(i, j) /= 0d0) cycle iloop
-    end do
-    
-    tooth_reduce(i) = k
-  end do iloop
-  
-  do i=1,N_det_generators
-    if(tooth_reduce(dress_jobs(i)) == 0) dress_jobs(i) = dress_jobs(i)+N_det*2
-  end do
-
-  do i=1,N_cp-1
-    call isort(dress_jobs(first_cp(i)+1),iorder,first_cp(i+1)-first_cp(i)-1)
-  end do
- 
- do i=1,N_det_generators
-   if(dress_jobs(i) > N_det) dress_jobs(i) = dress_jobs(i) - N_det*2
- end do
-END_PROVIDER
-
-
-subroutine get_comb_val(stato, detail, cur_cp, val, istate)
-  implicit none
-  integer, intent(in)           :: cur_cp, istate
-  integer                       :: first
-  double precision, intent(in)  :: stato, detail(N_states, N_det_generators)
-  double precision, intent(out) :: val
-  double precision :: curs
-  integer :: j, k
-  integer, external :: dress_find
-
-  curs = 1d0 - stato
-  val = 0d0
-  first = cp_first_tooth(cur_cp) 
-
-  do j = comb_teeth, first, -1
-    !DIR$ FORCEINLINE
-    k = dress_find(curs, dress_cweight,size(dress_cweight), first_det_of_teeth(j), first_det_of_teeth(j+1))
-    if(k == first_det_of_teeth(first)) then
-     val += detail(istate, k) * dress_weight_inv(k) * comb_step * fractage(first)
-    else
-     val += detail(istate, k) * dress_weight_inv(k) * comb_step
-    end if
-
-    curs -= comb_step
-  end do
-end subroutine
-
-
-subroutine get_comb(stato, dets)
-  implicit none
-  double precision, intent(in) :: stato
-  integer, intent(out) :: dets(comb_teeth)
-  double precision :: curs
-  integer :: j
-  integer, external :: dress_find
-
-  curs = 1d0 - stato
-  do j = comb_teeth, 1, -1
-    !DIR$ FORCEINLINE
-    dets(j) = dress_find(curs, dress_cweight,size(dress_cweight), first_det_of_teeth(j), first_det_of_teeth(j+1))
-    curs -= comb_step
-  end do
-end subroutine
-
-
-subroutine add_comb(com, computed, cp, N, tbc)
-  implicit none
-  double precision, intent(in) :: com
-  integer, intent(inout) :: N
-  double precision, intent(inout) :: cp(N_det)
-  logical, intent(inout) :: computed(N_det_generators)
-  integer, intent(inout) :: tbc(N_det_generators)
-  integer :: i, k, l, dets(comb_teeth)
-  
-  !DIR$ FORCEINLINE
-  call get_comb(com, dets)
-  k=N+1
-  do i = 1, comb_teeth
-    l = dets(i)
-    cp(l) += 1d0
-    if(.not.(computed(l))) then
-      tbc(k) = l
-      k = k+1
-      computed(l) = .true.
-    end if
-  end do
-  N = k-1
-end subroutine
-
-
-BEGIN_PROVIDER [ integer, dress_stoch_istate ]
-  implicit none
-  dress_stoch_istate = 1
-END_PROVIDER
-
- 
- BEGIN_PROVIDER [ double precision, dress_weight, (N_det_generators) ]
-&BEGIN_PROVIDER [ double precision, dress_weight_inv, (N_det_generators) ]
-&BEGIN_PROVIDER [ double precision, dress_cweight, (N_det_generators) ]
-&BEGIN_PROVIDER [ double precision, dress_cweight_cache, (N_det_generators) ]
-&BEGIN_PROVIDER [ double precision, fractage, (comb_teeth) ]
-&BEGIN_PROVIDER [ double precision, comb_step ]
-&BEGIN_PROVIDER [ integer, first_det_of_teeth, (comb_teeth+1) ]
-&BEGIN_PROVIDER [ integer, first_det_of_comb ]
-&BEGIN_PROVIDER [ integer, tooth_of_det, (N_det_generators) ]
-  implicit none
-  integer :: i
-  double precision :: norm_left, stato
-  integer, external :: dress_find  
-
-  dress_weight(1)  = psi_coef_generators(1,dress_stoch_istate)**2
-  dress_cweight(1) = psi_coef_generators(1,dress_stoch_istate)**2
-  
-  do i=1,N_det_generators
-    dress_weight(i) = psi_coef_generators(i,dress_stoch_istate)**2
-  enddo
-
-  ! Important to loop backwards for numerical precision
-  dress_cweight(N_det_generators) = dress_weight(N_det_generators)
-  do i=N_det_generators-1,1,-1
-    dress_cweight(i) = dress_weight(i) + dress_cweight(i+1) 
-  end do
-  
-  do i=1,N_det_generators
-    dress_weight(i)  = dress_weight(i) / dress_cweight(1)
-    dress_cweight(i) = dress_cweight(i) / dress_cweight(1)
-  enddo
-
-  do i=1,N_det_generators-1
-    dress_cweight(i) = 1.d0 - dress_cweight(i+1) 
-  end do
-  dress_cweight(N_det_generators) = 1.d0
-  
-  norm_left = 1d0
-  
-  comb_step = 1d0/dfloat(comb_teeth)
-  !print *, "comb_step", comb_step
-  first_det_of_comb = 1
-  do i=1,N_det_generators ! min(100,N_det_generators)
-    first_det_of_comb = i
-    if(dress_weight(i)/norm_left < comb_step) then
+  pt2_n_0(1) = 0
+  do
+    pt2_u_0 = tilde_cW(pt2_n_0(1))
+    r = tilde_cW(pt2_n_0(1) + pt2_minDetInFirstTeeth)
+    pt2_W_T = (1d0 - pt2_u_0) / dble(pt2_N_teeth)
+    if(pt2_W_T >= r - pt2_u_0) then
       exit
     end if
-    norm_left -= dress_weight(i)
+    pt2_n_0(1) += 1
+    if(N_det_generators - pt2_n_0(1) < pt2_minDetInFirstTeeth * pt2_N_teeth) then
+      stop "teeth building failed"
+    end if
   end do
-  first_det_of_comb = max(2,first_det_of_comb)
-  call write_int(6, first_det_of_comb-1, 'Size of deterministic set')
-  
-
-  comb_step =  (1d0 - dress_cweight(first_det_of_comb-1)) * comb_step
-  
-  stato = 1d0 - comb_step
-  iloc = N_det_generators
-  do i=comb_teeth, 1, -1
-    integer :: iloc
-    iloc = dress_find(stato, dress_cweight, N_det_generators, 1, iloc)
-    first_det_of_teeth(i) = iloc
-    fractage(i) = (dress_cweight(iloc) - stato) / dress_weight(iloc)
-    stato -= comb_step
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    
+  do t=2, pt2_N_teeth
+    r = pt2_u_0 + pt2_W_T * dble(t-1)
+    pt2_n_0(t) = dress_find_sample(r, tilde_cW)
   end do
-  first_det_of_teeth(comb_teeth+1) = N_det_generators + 1
-  first_det_of_teeth(1) = first_det_of_comb
+  pt2_n_0(pt2_N_teeth+1) = N_det_generators
+    
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  pt2_w(:pt2_n_0(1)) = tilde_w(:pt2_n_0(1))
+  do t=1, pt2_N_teeth
+    tooth_width = tilde_cW(pt2_n_0(t+1)) - tilde_cW(pt2_n_0(t))
+    do i=pt2_n_0(t)+1, pt2_n_0(t+1)
+      pt2_w(i) = tilde_w(i) * pt2_W_T / tooth_width
+    end do
+  end do
   
-
-  if(first_det_of_teeth(1) /= first_det_of_comb) then
-     print *, 'Error in ', irp_here
-     stop "comb provider"
-  endif
-  
+  pt2_cW(0) = 0d0
   do i=1,N_det_generators
-    dress_weight_inv(i) = 1.d0/dress_weight(i)
-  enddo
-
-  tooth_of_det(:first_det_of_teeth(1)-1) = 0
-  do i=1,comb_teeth
-    tooth_of_det(first_det_of_teeth(i):first_det_of_teeth(i+1)-1) = i
+    pt2_cW(i) = pt2_cW(i-1) + pt2_w(i)      
   end do
+  pt2_n_0(pt2_N_teeth+1) = N_det_generators
 END_PROVIDER
-
-
 
 
 

@@ -60,7 +60,7 @@ subroutine run_selection_slave(thread,iproc,energy)
       else
         ASSERT (N == buf%N)
       end if
-      call select_connected(i_generator,energy,pt2,buf,0)
+      call select_connected(i_generator,energy,pt2,buf,1,1)
     endif
 
     integer, external :: task_done_to_taskserver

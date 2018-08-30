@@ -353,7 +353,7 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
   integer(ZMQ_PTR),external      :: new_zmq_to_qp_run_socket
   integer(ZMQ_PTR)               :: zmq_to_qp_run_socket
 
-  integer(ZMQ_PTR), external     :: new_zmq_pull_socket
+  integer(ZMQ_PTR), external     :: new_zmq_pull_socket, zmq_abort
   integer :: more
   integer :: i, c, j, k, f, t, m, p, m_task
   integer :: task_id, n_tasks
@@ -362,7 +362,7 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
   double precision, external :: omp_get_wtime
   integer, allocatable :: dot_f(:)
   integer, external :: zmq_delete_tasks, dress_find_sample
-
+  
   delta = 0d0
   delta_s2 = 0d0
   allocate(cp(N_states, N_det, dress_N_cp, 2), edI(N_states, N_det))
@@ -382,7 +382,8 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
   S(:) = 0d0
   S2(:) = 0d0
   time0 = omp_get_wtime()
-  do while (m <= dress_N_cp)
+  more = 1
+  do while (m <= dress_N_cp .and. more == 1)
     if(dot_f(m) == 0) then
       E0 = 0
       do i=dress_dot_n_0(m),1,-1
@@ -406,8 +407,15 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
         error = eqt
         time = omp_get_wtime()
         print '(G10.3, 2X, F16.10, 2X, G16.3, 2X, F16.4, A20)', c, avg+E0+E(dress_stoch_istate), eqt, time-time0, ''
-      !end do
-      m += 1
+        m += 1
+        if(eqt < relative_error) then
+          if (zmq_abort(zmq_to_qp_run_socket) == -1) then
+            call sleep(1)
+            if (zmq_abort(zmq_to_qp_run_socket) == -1) then
+              print *, irp_here, ': Error in sending abort signal (2)'
+            endif
+          endif
+        end if
     else
       task_id = 0
       do
@@ -429,7 +437,6 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
 
   delta(:,:) = cp(:,:,m-1,1)
   delta_s2(:,:) = cp(:,:,m-1,2)
-
   dress(istate) = E(istate)+E0+avg
   call end_zmq_to_qp_run_socket(zmq_to_qp_run_socket)
 end subroutine

@@ -100,7 +100,7 @@ BEGIN_PROVIDER [ double precision, delta_ij_tmp, (N_states,N_det_delta_ij,2) ]
 !  else
 !    errr = 1d-4
 !  end if
-  relative_error = 0d0 ! 5.d-5
+  relative_error = 1.d-5
 
   call write_double(6,relative_error,"Convergence of the stochastic algorithm")
   

@@ -183,6 +183,7 @@ subroutine ZMQ_dress(E, dress, delta_out, delta_s2_out, relative_error)
   
   integer, external              :: add_task_to_taskserver
   double precision               :: state_average_weight_save(N_states)
+  print *, "ZMQ_dress"
   task(:) = CHAR(0)
   allocate(delta(N_states,N_det), delta_s2(N_states, N_det))
   state_average_weight_save(:) = state_average_weight(:)
@@ -232,7 +233,7 @@ subroutine ZMQ_dress(E, dress, delta_out, delta_s2_out, relative_error)
 
 
     do i=1,N_det_generators
-      do j=1,pt2_F(i) !!!!!!!!!!!! 
+      do j=1,pt2_F(i)  
         write(task(1:20),'(I9,1X,I9''|'')') j, pt2_J(i)
         if (add_task_to_taskserver(zmq_to_qp_run_socket,trim(task(1:20))) == -1) then
           stop 'Unable to add task to task server'
@@ -286,7 +287,7 @@ end
   
   allocate(d(N_det_generators+1))
 
-  dress_e(:,:) = 1d0
+  dress_e(:,:) = 0d0
   dress_dot_t(:) = 0
   dress_dot_n_0(:) = 0
   dress_dot_F = 0
@@ -319,6 +320,7 @@ end
       end do
     end do
   end do
+  
   do m=dress_N_cp, 2, -1
     dress_e(:,m) -= dress_e(:,m-1)
   end do
@@ -355,19 +357,20 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
   double precision, external :: omp_get_wtime
   integer, allocatable :: dot_f(:)
   integer, external :: zmq_delete_tasks, dress_find_sample
-  
+  logical :: found
+  found = .false.
   delta = 0d0
   delta_s2 = 0d0
   allocate(cp(N_states, N_det, dress_N_cp, 2), edI(N_states, N_det))
   allocate(edI_task(N_states, N_det), edI_index(N_det))
   allocate(breve_delta_m(N_states, N_det, 2))
-  allocate(dot_f(dress_N_cp))
+  allocate(dot_f(dress_N_cp+1))
   allocate(S(pt2_N_teeth+1), S2(pt2_N_teeth+1))
   edI = 0d0
   
   cp = 0d0
-  dot_f(:) = dress_dot_F(:)
-
+  dot_f(:dress_N_cp) = dress_dot_F(:)
+  dot_f(dress_N_cp+1) = 1
   zmq_to_qp_run_socket = new_zmq_to_qp_run_socket()
   more = 1
   m = 1
@@ -376,8 +379,8 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
   S2(:) = 0d0
   time0 = omp_get_wtime()
   more = 1
-  do while (m <= dress_N_cp)
-    if(more == 0 .and. dot_f(m) /= 0) exit
+  do while (.not. found) !(m <= dress_N_cp)
+    !if(more == 0 .and. dot_f(m) /= 0) exit
     if(dot_f(m) == 0) then
       E0 = 0
       do i=dress_dot_n_0(m),1,-1
@@ -400,23 +403,22 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
       eqt = sqrt(eqt / dble(c-1))
       error = eqt
       time = omp_get_wtime()
-      print '(G10.3, 2X, F16.10, 2X, G16.3, 2X, F16.4, A20)', c, avg+E0, eqt, time-time0, ''
+      print '(G10.3, 2X, F16.10, 2X, G16.3, 2X, F16.4, A20)', c, avg+E0+E(dress_stoch_istate), eqt, time-time0, ''
       m += 1
-      if(eqt <= 0d0*relative_error) then
-        if (zmq_abort(zmq_to_qp_run_socket) == -1) then
-          call sleep(1)
-          if (zmq_abort(zmq_to_qp_run_socket) == -1) then
-            print *, irp_here, ': Error in sending abort signal (2)'
-          endif
-        endif
+      if(eqt <= 1d0*relative_error) then
+        found = .true.
       end if
     else
       do
         call  pull_dress_results(zmq_socket_pull, m_task, f, edI_task, edI_index, breve_delta_m, task_id, n_tasks)
-        if(task_id == 0) exit
-        if (zmq_delete_tasks(zmq_to_qp_run_socket,zmq_socket_pull,task_id,n_tasks,more) == -1) then
-          stop 'Unable to delete tasks'
-        endif
+        if(m_task == 0) then
+          if (zmq_delete_tasks(zmq_to_qp_run_socket,zmq_socket_pull,task_id,n_tasks,more) == -1) then
+            stop 'Unable to delete tasks'
+          endif
+        else
+          i= zmq_delete_tasks(zmq_to_qp_run_socket,zmq_socket_pull,task_id,1,more)
+          exit
+        end if
       end do
       do i=1,n_tasks
         edI(:, edI_index(i)) += edI_task(:, i) 
@@ -427,7 +429,22 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
       dot_f(m_task) -= f
     end if
   end do
-
+  
+  if (zmq_abort(zmq_to_qp_run_socket) == -1) then
+    call sleep(1)
+    if (zmq_abort(zmq_to_qp_run_socket) == -1) then
+      print *, irp_here, ': Error in sending abort signal (2)'
+    endif
+  endif
+  
+  do while(more /= 0)
+    call  pull_dress_results(zmq_socket_pull, m_task, f, edI_task, edI_index, breve_delta_m, task_id, n_tasks)
+    if(m_task == 0) then
+      i = zmq_delete_tasks(zmq_to_qp_run_socket,zmq_socket_pull,task_id,n_tasks,more)
+    else
+      i = zmq_delete_tasks(zmq_to_qp_run_socket,zmq_socket_pull,task_id,1,more)
+    end if
+  end do
   delta(:,:) = cp(:,:,m-1,1)
   delta_s2(:,:) = cp(:,:,m-1,2)
   dress(istate) = E(istate)+E0+avg

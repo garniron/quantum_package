@@ -82,11 +82,16 @@ BEGIN_PROVIDER [ double precision, delta_ij_tmp, (N_states,N_det_delta_ij,2) ]
   
   double precision, allocatable  :: dress(:), del(:,:), del_s2(:,:)
   double precision               :: E_CI_before(N_states), relative_error
+  integer :: cnt = 0
 
   ! prevents re-providing if delta_ij_tmp is
   ! just being copied
-  if(N_det_delta_ij /= N_det) return
+  !if(N_det_delta_ij /= N_det) return
   
+  
+  cnt += 1
+  if(mod(cnt,2) == 0) return
+
   if(.true.) then
   allocate(dress(N_states), del(N_states, N_det_delta_ij), del_s2(N_states, N_det_delta_ij))
 

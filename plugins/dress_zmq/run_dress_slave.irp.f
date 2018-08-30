@@ -137,6 +137,7 @@ subroutine run_dress_slave(thread,iproce,energy)
       end do
       if(purge_task_id(will_send) /= 0) then
       call push_dress_results(zmq_socket_push, will_send, sum_f, edI_task, edI_index, breve_delta_m, purge_task_id(will_send), n_tasks)
+      !call task_done_to_taskserver(zmq_to_qp_run_socket,worker_id,purge_task_id(will_send))
       end if
       purge_task_id(will_send) = 0
       call omp_unset_lock(sending)
@@ -177,6 +178,7 @@ subroutine run_dress_slave(thread,iproce,energy)
       f(i_generator) += 1
       !push bidon
       if(task_id /= 0) then
+        !call task_done_to_taskserver(zmq_to_qp_run_socket,worker_id,task_id)
         call push_dress_results(zmq_socket_push, 0, 0, edI_task, edI_index, breve_delta_m, task_id, 1)
       end if
     end if
@@ -185,6 +187,7 @@ subroutine run_dress_slave(thread,iproce,energy)
   !$OMP SINGLE
   do m=1,dress_N_cp
     if(purge_task_id(m) /= 0) then
+      !call task_done_to_taskserver(zmq_to_qp_run_socket,worker_id,purge_task_id(m))
       call push_dress_results(zmq_socket_push, 0, 0, edI_task, edI_index, breve_delta_m, purge_task_id(m), 1)
     end if
   end do

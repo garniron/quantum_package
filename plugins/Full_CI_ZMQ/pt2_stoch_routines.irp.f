@@ -233,7 +233,6 @@ subroutine pt2_collector(zmq_socket_pull, E, relative_error, absolute_error, pt2
       end do
     end if
   end do
-  
   call end_zmq_to_qp_run_socket(zmq_to_qp_run_socket)
 end subroutine
 

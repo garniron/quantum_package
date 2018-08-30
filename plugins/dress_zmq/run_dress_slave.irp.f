@@ -46,7 +46,7 @@ subroutine run_dress_slave(thread,iproce,energy)
 
   edI = 0d0
   f = 0
-  delta_det = 0d9
+  delta_det = 0d0
   cp = 0d0
 
   task(:) = CHAR(0)
@@ -64,14 +64,13 @@ subroutine run_dress_slave(thread,iproce,energy)
   will_send = 0
 
   double precision :: hij, sij, tmp
-  !call i_h_j_s2(psi_det(1,1,1),psi_det(1,1,2),N_int,hij, sij)
   
   hij = E0_denominator(1)  !PROVIDE BEFORE OMP PARALLEL
 
   !$OMP PARALLEL DEFAULT(SHARED) &
   !$OMP PRIVATE(breve_delta_m, task, task_id) &
-  !$OMP PRIVATE(fac,m) &
-  !$OMP PRIVATE(i, will_send, i_generator, subset, iproc) &
+  !$OMP PRIVATE(tmp,fac,m,l,t,sum_f,n_tasks) &
+  !$OMP PRIVATE(i,p,will_send, i_generator, subset, iproc) &
   !$OMP PRIVATE(zmq_to_qp_run_socket, zmq_socket_push, worker_id)
 
   zmq_to_qp_run_socket = new_zmq_to_qp_run_socket()
@@ -117,14 +116,12 @@ subroutine run_dress_slave(thread,iproce,energy)
         breve_delta_m(:,:,2) += cp(:,:,l,2)
       end do
 
-      breve_delta_m(:,:,:) = breve_delta_m(:,:,:) / dress_M_m(will_send) !/ cps_N(cur_cp)
+      breve_delta_m(:,:,:) = breve_delta_m(:,:,:) / dress_M_m(will_send)
       
       do t=dress_dot_t(will_send)-1,0,-1
         breve_delta_m(:,:,1) = breve_delta_m(:,:,1) + delta_det(:,:,t,1)
         breve_delta_m(:,:,2) = breve_delta_m(:,:,2) + delta_det(:,:,t,2)
       end do
-      
-      
       
       call omp_set_lock(sending)
       n_tasks = 0
@@ -137,7 +134,6 @@ subroutine run_dress_slave(thread,iproce,energy)
           sum_f += f(i)
         end if
       end do
-!!!!call  pull_dress_results(zmq_socket_pull, m_task, f, edI_task, edI_index, breve_delta_m, task_id, n_tasks)
       call push_dress_results(zmq_socket_push, will_send, sum_f, edI_task, edI_index, breve_delta_m, 0, n_tasks)
       call omp_unset_lock(sending)
     end if
@@ -145,10 +141,8 @@ subroutine run_dress_slave(thread,iproce,energy)
     if(m /= dress_N_cp+1) then    
       !UPDATE i_generator
 
-
       breve_delta_m(:,:,:) = 0d0
       call generator_start(i_generator, iproc)
-
 
       call alpha_callback(breve_delta_m, i_generator, subset, pt2_F(i_generator)*0 + 1, iproc)
       
@@ -159,9 +153,9 @@ subroutine run_dress_slave(thread,iproce,energy)
       delta_det(:,:,t, 2) += breve_delta_m(:,:,2)
       call omp_unset_lock(lck_det(t))
     
-      do p=1,dress_N_cp ! m, dress_N_cp
-        if(dress_e(i_generator, p) /= 0) then
-          fac = dress_e(i_generator, p) * pt2_W_T / pt2_w(i_generator)
+      do p=1,dress_N_cp
+        if(dress_e(i_generator, p) /= 0d0) then
+          fac = dress_e(i_generator, p)
           call omp_set_lock(lck_sto(p))
           cp(:,:,p,1) += breve_delta_m(:,:,1) * fac
           cp(:,:,p,2) += breve_delta_m(:,:,2) * fac
@@ -170,11 +164,11 @@ subroutine run_dress_slave(thread,iproce,energy)
       end do
       
       tmp = 0d0
-      do i=1,N_det
+      do i=N_det,1,-1
         tmp += psi_coef(i, dress_stoch_istate)*breve_delta_m(dress_stoch_istate, i, 1)
       end do
       !$OMP ATOMIC
-      edI(i_generator) += tmp!  dot_product(psi_det_coef(:, dress_stoch_istate), breve_delta_m(dress_stoch_istate, :, 1))
+      edI(i_generator) += tmp
       !$OMP ATOMIC
       f(i_generator) += 1
       !push bidon

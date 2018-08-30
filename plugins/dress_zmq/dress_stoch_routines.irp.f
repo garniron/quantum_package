@@ -27,22 +27,10 @@ BEGIN_PROVIDER [ integer, dress_N_cp_max ]
   dress_N_cp_max = 100
 END_PROVIDER
 
-BEGIN_PROVIDER[ integer, dress_M_m, (dress_N_cp_max)]
-  implicit none
-  integer :: i
-  
-  do i=1,dress_N_cp_max-1
-    dress_M_m(i) = N_det_generators * i / (dress_N_cp_max+1)
-  end do
-  dress_M_m(1) = 1
-  dress_M_m(dress_N_cp_max) = N_det_generators+1
-END_PROVIDER
 
-
-
- BEGIN_PROVIDER[ integer, pt2_J, (N_det_generators)]
+ BEGIN_PROVIDER[ integer, dress_M_m, (dress_N_cp_max)]
+&BEGIN_PROVIDER[ integer, pt2_J, (N_det_generators)]
 &BEGIN_PROVIDER[ double precision, pt2_u, (N_det_generators)]
-&BEGIN_PROVIDER[ integer, dress_R, (0:N_det_generators)]
 &BEGIN_PROVIDER[ integer, dress_R1, (0:N_det_generators)]
 &BEGIN_PROVIDER[ double precision, dress_M_mi, (dress_N_cp_max, N_det_generators+1)]
 &BEGIN_PROVIDER [ integer, dress_P, (N_det_generators) ]
@@ -59,11 +47,16 @@ END_PROVIDER
   
   dress_M_mi = 0d0
   tilde_M = 0d0
-  dress_R(:) = 0
   dress_R1(:) = 0
   N_c = 0
   N_j = pt2_n_0(1)
   d(:) = .false.
+
+  do i=1,dress_N_cp_max-1
+    dress_M_m(i) = N_det_generators * i / (dress_N_cp_max+1)
+  end do
+  dress_M_m(1) = 1
+  dress_M_m(dress_N_cp_max) = N_det_generators+1
 
   do i=1,N_j
       d(i) = .true.
@@ -103,7 +96,6 @@ END_PROVIDER
     
     if(N_c == dress_M_m(m)) then
       dress_R1(m) = N_j
-      dress_R(N_j) = N_c
       dress_M_mi(m, :N_det_generators) = tilde_M(:)
       m += 1
     end if
@@ -111,7 +103,7 @@ END_PROVIDER
   
   dress_N_cp = m-1
   dress_R1(dress_N_cp) = N_j
-  
+  dress_M_m(dress_N_cp) = N_c
   !!!!!!!!!!!!!!
   do m=1,dress_N_cp
     do i=dress_R1(m-1)+1, dress_R1(m)
@@ -263,6 +255,7 @@ subroutine ZMQ_dress(E, dress, delta_out, delta_s2_out, relative_error)
     !!$OMP END PARALLEL
     delta_out(dress_stoch_istate,1:N_det) = delta(dress_stoch_istate,1:N_det)
     delta_s2_out(dress_stoch_istate,1:N_det) = delta_s2(dress_stoch_istate,1:N_det)
+    
     call end_parallel_job(zmq_to_qp_run_socket, zmq_socket_pull, 'dress')
     
     print *, '========== ================= ================= ================='
@@ -401,25 +394,23 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
           S2(p) += x**2
         end do
       end do
-        t = dress_dot_t(m)
-        avg = S(t) / dble(c)
-        eqt = (S2(t) / c) - (S(t)/c)**2
-        eqt = sqrt(eqt / dble(c-1))
-        error = eqt
-        time = omp_get_wtime()
-        print '(G10.3, 2X, F16.10, 2X, G16.3, 2X, F16.4, A20)', c, avg+E0+E(dress_stoch_istate), eqt, time-time0, ''
-        m += 1
-        if(eqt <= relative_error) then
-          print *, "ABORT"
+      t = dress_dot_t(m)
+      avg = S(t) / dble(c)
+      eqt = (S2(t) / c) - (S(t)/c)**2
+      eqt = sqrt(eqt / dble(c-1))
+      error = eqt
+      time = omp_get_wtime()
+      print '(G10.3, 2X, F16.10, 2X, G16.3, 2X, F16.4, A20)', c, avg+E0, eqt, time-time0, ''
+      m += 1
+      if(eqt <= 0d0*relative_error) then
+        if (zmq_abort(zmq_to_qp_run_socket) == -1) then
+          call sleep(1)
           if (zmq_abort(zmq_to_qp_run_socket) == -1) then
-            call sleep(1)
-            if (zmq_abort(zmq_to_qp_run_socket) == -1) then
-              print *, irp_here, ': Error in sending abort signal (2)'
-            endif
+            print *, irp_here, ': Error in sending abort signal (2)'
           endif
-        end if
+        endif
+      end if
     else
-      task_id = 0
       do
         call  pull_dress_results(zmq_socket_pull, m_task, f, edI_task, edI_index, breve_delta_m, task_id, n_tasks)
         if(task_id == 0) exit

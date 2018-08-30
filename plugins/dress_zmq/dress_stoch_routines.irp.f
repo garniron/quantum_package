@@ -370,7 +370,7 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
   allocate(breve_delta_m(N_states, N_det, 2))
   allocate(dot_f(dress_N_cp))
   allocate(S(pt2_N_teeth+1), S2(pt2_N_teeth+1))
-  edI = -100000d0
+  edI = 0d0
   
   cp = 0d0
   dot_f(:) = dress_dot_F(:)
@@ -418,7 +418,7 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
         endif
       end do
       do i=1,n_tasks
-        edI(:, edI_index(i)) = edI_task(:, i) !!!!!!!!!!!!!!! += !!!!!
+        edI(:, edI_index(i)) += edI_task(:, i) 
       end do
       cp(:,:,m_task,1) += breve_delta_m(:,:,1)
       cp(:,:,m_task,2) += breve_delta_m(:,:,2)

@@ -383,7 +383,8 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
   S2(:) = 0d0
   time0 = omp_get_wtime()
   more = 1
-  do while (m <= dress_N_cp .and. more == 1)
+  do while (m <= dress_N_cp)
+    if(more == 0 .and. dot_f(m) /= 0) exit
     if(dot_f(m) == 0) then
       E0 = 0
       do i=dress_dot_n_0(m),1,-1
@@ -408,7 +409,8 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
         time = omp_get_wtime()
         print '(G10.3, 2X, F16.10, 2X, G16.3, 2X, F16.4, A20)', c, avg+E0+E(dress_stoch_istate), eqt, time-time0, ''
         m += 1
-        if(eqt < relative_error) then
+        if(eqt <= relative_error) then
+          print *, "ABORT"
           if (zmq_abort(zmq_to_qp_run_socket) == -1) then
             call sleep(1)
             if (zmq_abort(zmq_to_qp_run_socket) == -1) then

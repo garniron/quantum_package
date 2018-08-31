@@ -23,17 +23,45 @@ END_PROVIDER
 
 
 
-BEGIN_PROVIDER [ integer, dress_N_cp_max ]
+BEGIN_PROVIDER[ integer, dress_N_cp_max ]
   dress_N_cp_max = 100
 END_PROVIDER
 
+ BEGIN_PROVIDER[integer, pt2_J, (N_det_generators)]
+&BEGIN_PROVIDER [integer, dress_R1, (0:N_det_generators) ]
+  implicit none
+  integer :: m,j
+  integer :: l,nmov
+  integer, allocatable :: iorder(:)
+  allocate(iorder(N_det_generators))
+
+  pt2_J = pt2_J_
+  dress_R1 = dress_R1_
+
+  do m=1,dress_N_cp
+    nmov = 0
+    l=dress_R1(m-1)+1
+    do j=l, dress_R1(m)
+      if(dress_M_mi(m, pt2_J(j)) == 0 .and. pt2_J(j) > dress_dot_n_0(m)) then
+        pt2_J(j) += N_det_generators**2
+        nmov += 1
+      end if
+    end do
+    if(dress_R1(m)-dress_R1(m-1) > 0) then
+      call isort(pt2_J(l), iorder, dress_R1(m)-dress_R1(m-1))
+    end if
+    dress_R1(m) -= nmov
+    do j=dress_R1(m)+1, dress_R1(m) + nmov
+      pt2_J(j) -= N_det_generators**2
+    end do
+  end do
+END_PROVIDER
 
  BEGIN_PROVIDER[ integer, dress_M_m, (dress_N_cp_max)]
-&BEGIN_PROVIDER[ integer, pt2_J, (N_det_generators)]
+&BEGIN_PROVIDER[ integer, pt2_J_, (N_det_generators)]
 &BEGIN_PROVIDER[ double precision, pt2_u, (N_det_generators)]
-&BEGIN_PROVIDER[ integer, dress_R1, (0:N_det_generators)]
+&BEGIN_PROVIDER[ integer, dress_R1_, (0:N_det_generators)]
 &BEGIN_PROVIDER[ double precision, dress_M_mi, (dress_N_cp_max, N_det_generators+1)]
-&BEGIN_PROVIDER [ integer, dress_P, (N_det_generators) ]
 &BEGIN_PROVIDER [ integer, dress_T, (N_det_generators) ]
 &BEGIN_PROVIDER [ integer, dress_N_cp ]
   implicit none
@@ -47,7 +75,7 @@ END_PROVIDER
   
   dress_M_mi = 0d0
   tilde_M = 0d0
-  dress_R1(:) = 0
+  dress_R1_(:) = 0
   N_c = 0
   N_j = pt2_n_0(1)
   d(:) = .false.
@@ -60,7 +88,7 @@ END_PROVIDER
 
   do i=1,N_j
       d(i) = .true.
-      pt2_J(i) = i
+      pt2_J_(i) = i
   end do
   call random_seed(put=(/3211,64,6566,321,65,321,654,65,321,6321,654,65,321,621,654,65,321,65,654,65,321,65/)) 
   call RANDOM_NUMBER(pt2_u)
@@ -78,7 +106,7 @@ END_PROVIDER
       tilde_M(i) += 1d0
       if(.not. d(i)) then
         N_j += 1
-        pt2_J(N_j) = i
+        pt2_J_(N_j) = i
         d(i) = .true.
       end if
     end do
@@ -88,29 +116,24 @@ END_PROVIDER
       U += 1
       if(.not. d(U)) then
         N_j += 1
-        pt2_J(N_j) = U
+        pt2_J_(N_j) = U
         d(U) = .true.
         exit;
       end if
     end do
     
     if(N_c == dress_M_m(m)) then
-      dress_R1(m) = N_j
+      dress_R1_(m) = N_j
       dress_M_mi(m, :N_det_generators) = tilde_M(:)
       m += 1
     end if
   enddo
   
   dress_N_cp = m-1
-  dress_R1(dress_N_cp) = N_j
+  dress_R1_(dress_N_cp) = N_j
   dress_M_m(dress_N_cp) = N_c
   !!!!!!!!!!!!!!
-  do m=1,dress_N_cp
-    do i=dress_R1(m-1)+1, dress_R1(m)
-      dress_P(pt2_J(i)) = m
-    end do
-  end do
-  
+ 
   do i=1, pt2_n_0(1)
     dress_T(i) = 0
   end do
@@ -238,10 +261,29 @@ subroutine dress_slave_inproc(i)
   call run_dress_slave(1,i,dress_e0_denominator)
 end
 
- BEGIN_PROVIDER [double precision, dress_e, (N_det_generators, dress_N_cp)]
+ BEGIN_PROVIDER [integer, dress_dot_F, (dress_N_cp)]
+&BEGIN_PROVIDER [ integer, dress_P, (N_det_generators) ]
+  implicit none
+  integer :: m,i
+ 
+  do m=1,dress_N_cp
+    do i=dress_R1(m-1)+1, dress_R1(m)
+      dress_P(pt2_J(i)) = m
+    end do
+  end do
+  
+  dress_dot_F = 0
+  do m=1,dress_N_cp
+    do i=dress_R1(m-1)+1,dress_R1(m)
+      dress_dot_F(m) += pt2_F(pt2_J(i))
+    end do
+  end do
+
+END_PROVIDER
+
+BEGIN_PROVIDER [double precision, dress_e, (N_det_generators, dress_N_cp)]
 &BEGIN_PROVIDER [integer, dress_dot_t, (0:dress_N_cp)]
 &BEGIN_PROVIDER [integer, dress_dot_n_0, (0:dress_N_cp)] 
-&BEGIN_PROVIDER [integer, dress_dot_F, (dress_N_cp)]
   implicit none
   
   logical, allocatable :: d(:)
@@ -252,14 +294,13 @@ end
   dress_e(:,:) = 0d0
   dress_dot_t(:) = 0
   dress_dot_n_0(:) = 0
-  dress_dot_F = 0
   d(:) = .false.
   U=0
   
   do m=1,dress_N_cp
-    do i=dress_R1(m-1)+1,dress_R1(m)
-      dress_dot_F(m) += pt2_F(pt2_J(i))
-      d(pt2_J(i)) = .true.
+    do i=dress_R1_(m-1)+1,dress_R1_(m)
+      !dress_dot_F(m) += pt2_F(pt2_J_(i))
+      d(pt2_J_(i)) = .true.
     end do
 
     do while(d(U+1))

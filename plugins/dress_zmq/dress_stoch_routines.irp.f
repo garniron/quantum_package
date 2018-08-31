@@ -385,9 +385,6 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
       end do
       cp(:,:,m_task,1) += breve_delta_m(:,:,1)
       cp(:,:,m_task,2) += breve_delta_m(:,:,2)
-      if(m_task == 1) then
-        print *, "M1", f
-      end if
       dot_f(m_task) -= f
     end if
   end do

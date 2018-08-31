@@ -9,7 +9,7 @@ END_PROVIDER
 &BEGIN_PROVIDER [ integer, pt2_F, (N_det_generators) ]
   implicit none
   pt2_F(:) = 1
-  pt2_F(:N_det_generators/100 + 1) = 1
+  pt2_F(:N_det_generators/100+1) = 5
   pt2_n_tasks_max = N_det_generators/100 + 1
   
   if(N_det_generators < 256) then
@@ -125,44 +125,6 @@ END_PROVIDER
 END_PROVIDER
 
 
-! BEGIN_PROVIDER [double precision, dress_e, (N_det_generators, dress_N_cp)]
-!&BEGIN_PROVIDER [integer, dress_dot_t, (0:dress_N_cp)]
-!&BEGIN_PROVIDER [integer, dress_dot_n_0, (0:dress_N_cp)]
-!  implicit none
-!  dress_e(:,:) = 1d0
-!  dress_dot_t(:) = 0
-!  dress_dot_n_0(:) = 0
-!  
-!  integer :: U, m, t, i
-!  
-!  U = pt2_n_0(1)+1
- ! 
-!  do m=1,dress_N_cp
-!    do while(dress_M_mi(m, U) /= 0d0)
-!      U = U+1
-!    end do
- !   dress_dot_t(m) = pt2_N_teeth + 1
- !   dress_dot_n_0(m) = N_det_generators
- !!   
- !   do t = 2, pt2_N_teeth+1
- !     if(U <= pt2_n_0(t)) then
- !       dress_dot_t(m) = t-1
-!        dress_dot_n_0(m) = pt2_n_0(t-1)
-!        exit
-!      end if
-!    end do
-!    do t=dress_dot_t(m), pt2_N_teeth
-!      do i=pt2_n_0(t)+1, pt2_n_0(t+1)
-!        dress_e(i,m) = pt2_W_T * dress_M_mi(m,i) / pt2_w(i)
- !     end do
- !   end do
- ! end do
-!  do m=dress_N_cp, 2, -1
-!    dress_e(:,m) -= dress_e(:,m-1)
-!  end do
-!END_PROVIDER
-
-
 subroutine ZMQ_dress(E, dress, delta_out, delta_s2_out, relative_error)
   use f77_zmq
   
@@ -233,7 +195,7 @@ subroutine ZMQ_dress(E, dress, delta_out, delta_s2_out, relative_error)
 
 
     do i=1,N_det_generators
-      do j=1,pt2_F(i)  
+      do j=1,pt2_F(pt2_J(i))
         write(task(1:20),'(I9,1X,I9''|'')') j, pt2_J(i)
         if (add_task_to_taskserver(zmq_to_qp_run_socket,trim(task(1:20))) == -1) then
           stop 'Unable to add task to task server'
@@ -314,10 +276,8 @@ end
         exit
       end if
     end do
-    do t=dress_dot_t(m), pt2_N_teeth
-      do i=pt2_n_0(t)+1, pt2_n_0(t+1)
-        dress_e(i,m) = pt2_W_T * dress_M_mi(m,i) / pt2_w(i)
-      end do
+    do i=dress_dot_n_0(m)+1, N_det_generators !pt2_n_0(t+1)
+      dress_e(i,m) = pt2_W_T * dress_M_mi(m,i) / pt2_w(i)
     end do
   end do
   
@@ -379,8 +339,8 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
   S2(:) = 0d0
   time0 = omp_get_wtime()
   more = 1
-  do while (.not. found) !(m <= dress_N_cp)
-    !if(more == 0 .and. dot_f(m) /= 0) exit
+
+  do while (.not. found)
     if(dot_f(m) == 0) then
       E0 = 0
       do i=dress_dot_n_0(m),1,-1
@@ -425,7 +385,9 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
       end do
       cp(:,:,m_task,1) += breve_delta_m(:,:,1)
       cp(:,:,m_task,2) += breve_delta_m(:,:,2)
-      
+      if(m_task == 1) then
+        print *, "M1", f
+      end if
       dot_f(m_task) -= f
     end if
   end do

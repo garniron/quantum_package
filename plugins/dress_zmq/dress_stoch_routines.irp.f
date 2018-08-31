@@ -455,26 +455,21 @@ end subroutine
 integer function dress_find_sample(v, w)
   implicit none
   double precision, intent(in) :: v, w(0:N_det_generators)
-  integer :: i,l,h
-  integer, parameter :: block=64
+  integer :: i,l,r
 
   l = 0
-  h = N_det_generators
+  r = N_det_generators
 
-  do while(h-l >= block)
-    i = ishft(h+l,-1)
-    if(w(i+1) > v) then
-      h = i-1
+  do while(r-l > 1)
+    i = (r+l) / 2
+    if(w(i) < v) then
+      l = i
     else
-      l = i+1
+      r = i
     end if
   end do
-  !DIR$ LOOP COUNT (64)
-  do dress_find_sample=l,h
-    if(w(dress_find_sample) >= v) then
-      exit
-    end if
-  end do
+
+  dress_find_sample = r
 end function
 
 

@@ -278,7 +278,9 @@ end
       dress_dot_F(m) += pt2_F(pt2_J(i))
     end do
   end do
-
+  do m=2,dress_N_cp
+    dress_dot_F(m) += dress_dot_F(m-1)
+  end do
 END_PROVIDER
 
 BEGIN_PROVIDER [double precision, dress_e, (N_det_generators, dress_N_cp)]
@@ -406,7 +408,7 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
       time = omp_get_wtime()
       print '(G10.3, 2X, F16.10, 2X, G16.3, 2X, F16.4, A20)', c, avg+E0+E(dress_stoch_istate), eqt, time-time0, ''
       m += 1
-      if(eqt <= 0d0*relative_error) then
+      if(eqt <= 1d0*relative_error) then
         found = .true.
       end if
     else

@@ -128,11 +128,11 @@ subroutine run_dress_slave(thread,iproce,energy)
       n_tasks = 0
       sum_f = 0
       do i=1,N_det_generators
+        if(dress_P(i) <= will_send) sum_f = sum_f + f(i)
         if(dress_P(i) == will_send .and. f(i) /= 0) then
           n_tasks += 1
           edI_task(n_tasks) = edI(i)
           edI_index(n_tasks) = i
-          sum_f += f(i)
         end if
       end do
       call push_dress_results(zmq_socket_push, will_send, sum_f, edI_task, edI_index, breve_delta_m, 0, n_tasks)

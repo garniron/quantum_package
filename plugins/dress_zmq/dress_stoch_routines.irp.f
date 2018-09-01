@@ -406,7 +406,7 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
       time = omp_get_wtime()
       print '(G10.3, 2X, F16.10, 2X, G16.3, 2X, F16.4, A20)', c, avg+E0+E(dress_stoch_istate), eqt, time-time0, ''
       m += 1
-      if(eqt <= 1d0*relative_error) then
+      if(eqt <= 0d0*relative_error) then
         found = .true.
       end if
     else
@@ -417,7 +417,8 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
             stop 'Unable to delete tasks'
           endif
         else
-          i= zmq_delete_tasks(zmq_to_qp_run_socket,zmq_socket_pull,task_id,1,more)
+          if(task_id /= 0) stop "TASKID"
+          !i= zmq_delete_tasks(zmq_to_qp_run_socket,zmq_socket_pull,task_id,1,more)
           exit
         end if
       end do
@@ -439,6 +440,7 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
   
   do while(more /= 0)
     call  pull_dress_results(zmq_socket_pull, m_task, f, edI_task, edI_index, breve_delta_m, task_id, n_tasks)
+    if(task_id == 0) cycle
     if(m_task == 0) then
       i = zmq_delete_tasks(zmq_to_qp_run_socket,zmq_socket_pull,task_id,n_tasks,more)
     else

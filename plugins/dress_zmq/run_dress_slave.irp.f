@@ -31,7 +31,7 @@ subroutine run_dress_slave(thread,iproce,energy)
   integer, allocatable :: f(:)
   integer :: cp_sent, cp_done
   integer :: cp_max(Nproc)
-  integer :: will_send, task_id, purge_task_id(dress_N_cp+1)
+  integer :: will_send, task_id, purge_task_id
   integer(kind=OMP_LOCK_KIND) :: lck_det(0:pt2_N_teeth+1)
   integer(kind=OMP_LOCK_KIND) :: lck_sto(0:dress_N_cp+1), sending
   double precision :: fac
@@ -103,8 +103,8 @@ subroutine run_dress_slave(thread,iproce,energy)
       will_send = cp_sent + 1
       cp_sent = will_send
     end if
-    if(purge_task_id(m) == 0) then
-      purge_task_id(m) = task_id
+    if(purge_task_id == 0) then
+      purge_task_id = task_id
       task_id = 0
     end if
     !$OMP END CRITICAL
@@ -135,11 +135,8 @@ subroutine run_dress_slave(thread,iproce,energy)
           sum_f += f(i)
         end if
       end do
-      if(purge_task_id(will_send) /= 0) then
-      call push_dress_results(zmq_socket_push, will_send, sum_f, edI_task, edI_index, breve_delta_m, purge_task_id(will_send), n_tasks)
+      call push_dress_results(zmq_socket_push, will_send, sum_f, edI_task, edI_index, breve_delta_m, 0, n_tasks)
       !call task_done_to_taskserver(zmq_to_qp_run_socket,worker_id,purge_task_id(will_send))
-      end if
-      purge_task_id(will_send) = 0
       call omp_unset_lock(sending)
     end if
     
@@ -185,12 +182,12 @@ subroutine run_dress_slave(thread,iproce,energy)
   end do
   !$OMP BARRIER
   !$OMP SINGLE
-  do m=1,dress_N_cp
-    if(purge_task_id(m) /= 0) then
+  !do m=1,dress_N_cp
+    if(purge_task_id /= 0) then
       !call task_done_to_taskserver(zmq_to_qp_run_socket,worker_id,purge_task_id(m))
-      call push_dress_results(zmq_socket_push, 0, 0, edI_task, edI_index, breve_delta_m, purge_task_id(m), 1)
+      call push_dress_results(zmq_socket_push, 0, 0, edI_task, edI_index, breve_delta_m, purge_task_id, 1)
     end if
-  end do
+  !end do
   !$OMP END SINGLE
 
   call disconnect_from_taskserver(zmq_to_qp_run_socket,worker_id)

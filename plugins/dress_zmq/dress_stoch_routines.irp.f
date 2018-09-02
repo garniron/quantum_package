@@ -341,7 +341,6 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
 
   double precision, intent(in)   :: relative_error, E(N_states)
   double precision, intent(out)  :: dress(N_states)
-  double precision, allocatable  :: cp(:,:,:,:)
 
   double precision, intent(out)  :: delta(N_states, N_det)
   double precision, intent(out)  :: delta_s2(N_states, N_det)
@@ -361,20 +360,23 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
   integer, allocatable :: dot_f(:)
   integer, external :: zmq_delete_tasks, dress_find_sample
   logical :: found
+  integer :: worker_id
+  zmq_to_qp_run_socket = new_zmq_to_qp_run_socket()
+
+  call connect_to_taskserver(zmq_to_qp_run_socket,worker_id,1)
+  
   found = .false.
   delta = 0d0
   delta_s2 = 0d0
-  allocate(cp(N_states, N_det, dress_N_cp, 2), edI(N_states, N_det))
+  allocate(edI(N_states, N_det))
   allocate(edI_task(N_states, N_det), edI_index(N_det))
   allocate(breve_delta_m(N_states, N_det, 2))
   allocate(dot_f(dress_N_cp+1))
   allocate(S(pt2_N_teeth+1), S2(pt2_N_teeth+1))
   edI = 0d0
   
-  cp = 0d0
   dot_f(:dress_N_cp) = dress_dot_F(:)
   dot_f(dress_N_cp+1) = 1
-  zmq_to_qp_run_socket = new_zmq_to_qp_run_socket()
   more = 1
   m = 1
   c = 0
@@ -408,7 +410,9 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
       time = omp_get_wtime()
       print '(G10.3, 2X, F16.10, 2X, G16.3, 2X, F16.4, A20)', c, avg+E0+E(dress_stoch_istate), eqt, time-time0, ''
       m += 1
-      if(eqt <= 1d0*relative_error) then
+      if(eqt <= relative_error) then
+        integer, external :: zmq_put_dvector
+        i= zmq_put_dvector(zmq_to_qp_run_socket, worker_id, "ending", dble(m-1), 1)
         found = .true.
       end if
     else
@@ -427,8 +431,6 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
       do i=1,n_tasks
         edI(:, edI_index(i)) += edI_task(:, i) 
       end do
-      cp(:,:,m_task,1) += breve_delta_m(:,:,1)
-      cp(:,:,m_task,2) += breve_delta_m(:,:,2)
       dot_f(m_task) -= f
     end if
   end do
@@ -439,19 +441,31 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
       print *, irp_here, ': Error in sending abort signal (2)'
     endif
   endif
-  
+
+  integer :: ff
+
+  ff = dress_dot_F(m-1)
+  delta= 0d0
+  delta_s2 = 0d0
   do while(more /= 0)
     call  pull_dress_results(zmq_socket_pull, m_task, f, edI_task, edI_index, breve_delta_m, task_id, n_tasks)
-    if(task_id == 0) cycle
-    if(m_task == 0) then
-      i = zmq_delete_tasks(zmq_to_qp_run_socket,zmq_socket_pull,task_id,n_tasks,more)
-    else
-      i = zmq_delete_tasks(zmq_to_qp_run_socket,zmq_socket_pull,task_id,1,more)
-    end if
+    
+   if(task_id == 0) cycle                                                                                    
+   if(m_task == 0) then                                                                                      
+       i = zmq_delete_tasks(zmq_to_qp_run_socket,zmq_socket_pull,task_id,n_tasks,more)                         
+     else                                                                                                      
+       i = zmq_delete_tasks(zmq_to_qp_run_socket,zmq_socket_pull,task_id,1,more)
+     end if
+
+
+    if(m_task >= 0) cycle
+    ff = ff - f
+    delta(:,:) += breve_delta_m(:,:,1)
+    delta_s2(:,:) += breve_delta_m(:,:,2) 
   end do
-  delta(:,:) = cp(:,:,m-1,1)
-  delta_s2(:,:) = cp(:,:,m-1,2)
   dress(istate) = E(istate)+E0+avg
+  if(ff /= 0) stop "WRONG NUMBER OF FRAGMENTS COLLECTED"
+  call disconnect_from_taskserver(zmq_to_qp_run_socket,worker_id)
   call end_zmq_to_qp_run_socket(zmq_to_qp_run_socket)
 end subroutine
 

@@ -112,20 +112,6 @@ subroutine run_dress_slave(thread,iproce,energy)
     !$OMP END CRITICAL
     
     if(will_send /= 0 .and. will_send <= int(ending(1))) then
-      breve_delta_m = 0d0
-      
-      do l=will_send, 1,-1
-        breve_delta_m(:,:,1) += cp(:,:,l,1)
-        breve_delta_m(:,:,2) += cp(:,:,l,2)
-      end do
-
-      breve_delta_m(:,:,:) = breve_delta_m(:,:,:) / dress_M_m(will_send)
-      
-      do t=dress_dot_t(will_send)-1,0,-1
-        breve_delta_m(:,:,1) = breve_delta_m(:,:,1) + delta_det(:,:,t,1)
-        breve_delta_m(:,:,2) = breve_delta_m(:,:,2) + delta_det(:,:,t,2)
-      end do
-      
       call omp_set_lock(sending)
       n_tasks = 0
       sum_f = 0

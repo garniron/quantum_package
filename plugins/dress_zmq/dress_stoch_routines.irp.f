@@ -43,7 +43,7 @@ END_PROVIDER
     l=dress_R1(m-1)+1
     do j=l, dress_R1(m)
       if(dress_M_mi(m, pt2_J(j)) == 0 .and. pt2_J(j) > dress_dot_n_0(m)) then
-        pt2_J(j) += N_det_generators**2
+        pt2_J(j) += N_det_generators
         nmov += 1
       end if
     end do
@@ -52,7 +52,7 @@ END_PROVIDER
     end if
     dress_R1(m) -= nmov
     do j=dress_R1(m)+1, dress_R1(m) + nmov
-      pt2_J(j) -= N_det_generators**2
+      pt2_J(j) -= N_det_generators
     end do
   end do
 END_PROVIDER

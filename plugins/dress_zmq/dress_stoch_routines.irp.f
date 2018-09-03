@@ -10,7 +10,7 @@ END_PROVIDER
   implicit none
   pt2_F(:) = 1
   !pt2_F(:N_det_generators/1000*0+50) = 1
-  pt2_n_tasks_max = N_det_generators/100 + 1
+  pt2_n_tasks_max = 16 ! N_det_generators/100 + 1
   
   if(N_det_generators < 256) then
     pt2_minDetInFirstTeeth = 1
@@ -176,7 +176,6 @@ subroutine ZMQ_dress(E, dress, delta_out, delta_s2_out, relative_error)
   
   integer, external              :: add_task_to_taskserver
   double precision               :: state_average_weight_save(N_states)
-  print *, "ZMQ_dress"
   task(:) = CHAR(0)
   allocate(delta(N_states,N_det), delta_s2(N_states, N_det))
   state_average_weight_save(:) = state_average_weight(:)
@@ -359,9 +358,9 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
   integer(ZMQ_PTR)               :: zmq_to_qp_run_socket
 
   integer(ZMQ_PTR), external     :: new_zmq_pull_socket, zmq_abort
-  integer :: more
+  integer, allocatable :: task_id(:)
   integer :: i, c, j, k, f, t, m, p, m_task
-  integer :: task_id, n_tasks
+  integer :: more, n_tasks
   double precision :: E0, error, x, v, time, time0
   double precision :: avg, eqt
   double precision, external :: omp_get_wtime
@@ -376,6 +375,7 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
   found = .false.
   delta = 0d0
   delta_s2 = 0d0
+  allocate(task_id(pt2_n_tasks_max))
   allocate(edI(N_states, N_det))
   allocate(edI_task(N_states, N_det), edI_index(N_det))
   allocate(breve_delta_m(N_states, N_det, 2))
@@ -431,7 +431,7 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
             stop 'Unable to delete tasks'
           endif
         else
-          if(task_id /= 0) stop "TASKID"
+          !if(task_id(1) /= 0) stop "TASKID"
           !i= zmq_delete_tasks(zmq_to_qp_run_socket,zmq_socket_pull,task_id,1,more)
           exit
         end if
@@ -442,7 +442,6 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
       dot_f(m_task) -= f
     end if
   end do
-  
   if (zmq_abort(zmq_to_qp_run_socket) == -1) then
     call sleep(1)
     if (zmq_abort(zmq_to_qp_run_socket) == -1) then
@@ -458,10 +457,10 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
   do while(more /= 0)
     call  pull_dress_results(zmq_socket_pull, m_task, f, edI_task, edI_index, breve_delta_m, task_id, n_tasks)
     
-   if(task_id == 0) cycle                                                                                    
-   if(m_task == 0) then                                                                                      
+   !if(task_id(0) == 0) cycle                                                                                    
+   if(m_task == 0) then
        i = zmq_delete_tasks(zmq_to_qp_run_socket,zmq_socket_pull,task_id,n_tasks,more)                         
-     else                                                                                                      
+     else if(m_task < 0) then                                                                                                 
        i = zmq_delete_tasks(zmq_to_qp_run_socket,zmq_socket_pull,task_id,1,more)
      end if
 

@@ -37,7 +37,9 @@ subroutine run_dress_slave(thread,iproce,energy)
   double precision :: fac
   double precision :: ending(1)
   integer, external :: zmq_get_dvector
-      
+! double precision, external :: omp_get_wtime
+double precision :: time, time0
+
   if(iproce /= 0) stop "RUN DRESS SLAVE is OMP"
   
   allocate(delta_det(N_states, N_det, 0:pt2_N_teeth+1, 2))
@@ -71,7 +73,8 @@ subroutine run_dress_slave(thread,iproce,energy)
   !$OMP PRIVATE(breve_delta_m, task, task_id) &
   !$OMP PRIVATE(tmp,fac,m,l,t,sum_f,n_tasks) &
   !$OMP PRIVATE(i,p,will_send, i_generator, subset, iproc) &
-  !$OMP PRIVATE(zmq_to_qp_run_socket, zmq_socket_push, worker_id)
+  !$OMP PRIVATE(zmq_to_qp_run_socket, zmq_socket_push, worker_id) &
+  !$OMP PRIVATE(time, time0)
   zmq_to_qp_run_socket = new_zmq_to_qp_run_socket()
   zmq_socket_push      = new_zmq_push_socket(thread)
   call connect_to_taskserver(zmq_to_qp_run_socket,worker_id,thread)
@@ -80,7 +83,6 @@ subroutine run_dress_slave(thread,iproce,energy)
     call end_zmq_push_socket(zmq_socket_push,thread)
     stop "WORKER -1"
   end if
-  
   iproc = omp_get_thread_num()+1
   allocate(breve_delta_m(N_states,N_det,2))
   
@@ -132,9 +134,10 @@ subroutine run_dress_slave(thread,iproce,energy)
 
       breve_delta_m(:,:,:) = 0d0
       call generator_start(i_generator, iproc)
-
-      call alpha_callback(breve_delta_m, i_generator, subset, pt2_F(i_generator)*0 + 1, iproc)
-      
+      time0 = omp_get_wtime()
+      call alpha_callback(breve_delta_m, i_generator, subset, pt2_F(i_generator), iproc)
+      time = omp_get_wtime()
+      !print '(I0.11, I4, A12, F12.3)', i_generator, subset, "GREPMETIME", time-time0
       t = dress_T(i_generator)
     
       call omp_set_lock(lck_det(t))

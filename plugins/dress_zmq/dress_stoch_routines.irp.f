@@ -9,14 +9,14 @@ END_PROVIDER
 &BEGIN_PROVIDER [ integer, pt2_F, (N_det_generators) ]
   implicit none
   pt2_F(:) = 1
-  pt2_F(:N_det_generators/100+1) = 5
+  !pt2_F(:N_det_generators/1000*0+50) = 1
   pt2_n_tasks_max = N_det_generators/100 + 1
   
   if(N_det_generators < 256) then
     pt2_minDetInFirstTeeth = 1
     pt2_N_teeth = 1
   else
-    pt2_minDetInFirstTeeth = 5
+    pt2_minDetInFirstTeeth = min(5, N_det_generators)
     pt2_N_teeth = 16
   end if
 END_PROVIDER
@@ -24,7 +24,7 @@ END_PROVIDER
 
 
 BEGIN_PROVIDER[ integer, dress_N_cp_max ]
-  dress_N_cp_max = 100
+  dress_N_cp_max = 32
 END_PROVIDER
 
  BEGIN_PROVIDER[integer, pt2_J, (N_det_generators)]
@@ -79,10 +79,19 @@ END_PROVIDER
   N_c = 0
   N_j = pt2_n_0(1)
   d(:) = .false.
-
+  
+  U = min(1, N_det_generators/(dress_N_cp_max**2/2))
   do i=1,dress_N_cp_max-1
-    dress_M_m(i) = N_det_generators * i / (dress_N_cp_max+1)
+    dress_M_m(i) = U * ((i**2-i)/2)! / (dress_N_cp_max+1)
   end do
+
+  
+  
+  U = N_det_generators/((dress_N_cp_max**2+dress_N_cp_max)/2)+1
+  do i=1, dress_N_cp_max
+    dress_M_m(i) = U * (((i*i)+i)/2)
+  end do
+
   dress_M_m(1) = 1
   dress_M_m(dress_N_cp_max) = N_det_generators+1
 
@@ -144,7 +153,6 @@ END_PROVIDER
     end do
   end do
   !!!!!!!!!!!!!
-  
 END_PROVIDER
 
 

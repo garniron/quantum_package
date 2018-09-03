@@ -70,6 +70,7 @@ subroutine generate_singles_and_doubles(delta_ij_loc, i_generator, bitmask_index
   allocate(preinteresting_det(N_int,2,N_det))
   
   
+  maskInd = -1
     
   monoAdo = .true.
   monoBdo = .true.
@@ -192,7 +193,6 @@ subroutine generate_singles_and_doubles(delta_ij_loc, i_generator, bitmask_index
   allocate(counted(mo_tot_num, mo_tot_num), countedOrb(mo_tot_num, 2))
   allocate (indexes(0:mo_tot_num, 0:mo_tot_num))
   allocate (indexes_end(0:mo_tot_num, 0:mo_tot_num))
-  maskInd = -1
   integer :: nb_count
   do s1=1,2
     do i1=N_holes(s1),1,-1   ! Generate low excitations first

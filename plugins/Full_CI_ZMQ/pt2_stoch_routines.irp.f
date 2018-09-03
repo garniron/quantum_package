@@ -240,28 +240,22 @@ end subroutine
 integer function pt2_find_sample(v, w)
   implicit none
   double precision, intent(in) :: v, w(0:N_det_generators)
-  integer :: i,l,h
-  integer, parameter :: block=64
+  integer :: i,l,r
 
   l = 0
-  h = N_det_generators
+  r = N_det_generators
 
-  do while(h-l >= block)
-    i = ishft(h+l,-1)
-    if(w(i+1) > v) then
-      h = i-1
+  do while(r-l > 1)
+    i = (r+l) / 2
+    if(w(i) < v) then
+      l = i
     else
-      l = i+1
+      r = i
     end if
   end do
-  !DIR$ LOOP COUNT (64)
-  do pt2_find_sample=l,h
-    if(w(pt2_find_sample) >= v) then
-      exit
-    end if
-  end do
-end function
 
+  pt2_find_sample = r
+end function
 
 
  BEGIN_PROVIDER[ integer, pt2_J, (N_det_generators)]
@@ -284,8 +278,11 @@ end function
       d(i) = .true.
       pt2_J(i) = i
   end do
-  
+  call random_seed(put=(/3211,64,6566,321,65,321,654,65,321,6321,654,65,321,621,654,65,321,65,654,65,321,65/)) 
   call RANDOM_NUMBER(pt2_u)
+  call RANDOM_NUMBER(pt2_u)
+  
+
   
   U = 0
   

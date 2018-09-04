@@ -85,34 +85,21 @@ BEGIN_PROVIDER [ double precision, delta_ij_tmp, (N_states,N_det_delta_ij,2) ]
   double precision, allocatable  :: dress(:), del(:,:), del_s2(:,:)
   double precision               :: E_CI_before(N_states), relative_error
 
-  ! prevents re-providing if delta_ij_tmp is
-  ! just being copied
-  if(N_det_delta_ij == N_det) then
+  allocate(dress(N_states), del(N_states, N_det_delta_ij), del_s2(N_states, N_det_delta_ij))
+
+  delta_ij_tmp = 0d0
+
+  E_CI_before(:) = dress_E0_denominator(:) + nuclear_repulsion
+  relative_error = 1.d-5
+
+  call write_double(6,relative_error,"Convergence of the stochastic algorithm")
   
-    allocate(dress(N_states), del(N_states, N_det_delta_ij), del_s2(N_states, N_det_delta_ij))
-
-    delta_ij_tmp = 0d0
-
-    E_CI_before(:) = psi_energy(:) + nuclear_repulsion
-    threshold_selectors = 1.d0
-    threshold_generators = 1.d0 
-    SOFT_TOUCH threshold_selectors threshold_generators
-  !  if(errr /= 0d0) then
-  !    errr = errr / 2d0 
-  !  else
-  !    errr = 1d-4
-  !  end if
-    relative_error = 1.d-3
-
-    call write_double(6,relative_error,"Relative error for the stochastic algorithm")
-    
-    call ZMQ_dress(E_CI_before, dress, del, del_s2, abs(relative_error), N_det_delta_ij)
-    delta_ij_tmp(:,:,1) = del(:,:)
-    delta_ij_tmp(:,:,2) = del_s2(:,:)
+  call ZMQ_dress(E_CI_before, dress, del, del_s2, abs(relative_error), N_det_delta_ij)
+  delta_ij_tmp(:,:,1) = del(:,:)
+  delta_ij_tmp(:,:,2) = del_s2(:,:)
 
 
-    deallocate(dress, del, del_s2)
-  end if
+  deallocate(dress, del, del_s2)
 END_PROVIDER
 
 

@@ -22,12 +22,11 @@ subroutine run_pt2_slave(thread,iproc,energy)
   logical :: done
 
   double precision,allocatable :: pt2(:,:)
-  integer :: n_tasks, k, n_tasks_max
+  integer :: n_tasks, k
   integer, allocatable :: i_generator(:), subset(:)
 
-  n_tasks_max = N_det_generators/100+1
-  allocate(task_id(n_tasks_max), task(n_tasks_max))
-  allocate(pt2(N_states,n_tasks_max), i_generator(n_tasks_max), subset(n_tasks_max))
+  allocate(task_id(pt2_n_tasks_max), task(pt2_n_tasks_max))
+  allocate(pt2(N_states,pt2_n_tasks_max), i_generator(pt2_n_tasks_max), subset(pt2_n_tasks_max))
 
   zmq_to_qp_run_socket = new_zmq_to_qp_run_socket()
 
@@ -47,7 +46,7 @@ subroutine run_pt2_slave(thread,iproc,energy)
   do while (.not.done)
 
     n_tasks = max(1,n_tasks)
-    n_tasks = min(n_tasks,n_tasks_max)
+    n_tasks = min(n_tasks,pt2_n_tasks_max)
 
     integer, external :: get_tasks_from_taskserver
     if (get_tasks_from_taskserver(zmq_to_qp_run_socket,worker_id, task_id, task, n_tasks) == -1) then
@@ -66,7 +65,7 @@ subroutine run_pt2_slave(thread,iproc,energy)
     do k=1,n_tasks
         pt2(:,k) = 0.d0
         buf%cur = 0
-        call select_connected(i_generator(k),energy,pt2(1,k),buf,subset(k))
+        call select_connected(i_generator(k),energy,pt2(1,k),buf,subset(k),pt2_F(i_generator(k)))
     enddo
     call wall_time(time1)
 
@@ -201,12 +200,5 @@ IRP_ENDIF
 
 end subroutine
  
- 
-BEGIN_PROVIDER [ double precision, pt2_workload, (N_det_generators) ]
-  integer :: i
-  do i=1,N_det_generators
-    pt2_workload(i) = dfloat(N_det_generators - i + 1)**2
-  end do
-  pt2_workload = pt2_workload / sum(pt2_workload)
-END_PROVIDER
+
             

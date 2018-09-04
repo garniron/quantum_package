@@ -46,11 +46,11 @@ subroutine get_mask_phase(det, phasemask)
 end subroutine
 
 
-subroutine select_connected(i_generator,E0,pt2,b,subset)
+subroutine select_connected(i_generator,E0,pt2,b,subset,csubset)
   use bitmasks
   use selection_types
   implicit none
-  integer, intent(in)            :: i_generator, subset
+  integer, intent(in)            :: i_generator, subset, csubset
   type(selection_buffer), intent(inout) :: b
   double precision, intent(inout)  :: pt2(N_states)
   integer :: k,l
@@ -71,7 +71,7 @@ subroutine select_connected(i_generator,E0,pt2,b,subset)
       particle_mask(k,1) = iand(generators_bitmask(k,1,s_part,l), not(psi_det_generators(k,1,i_generator)) )
       particle_mask(k,2) = iand(generators_bitmask(k,2,s_part,l), not(psi_det_generators(k,2,i_generator)) )
     enddo
-    call select_singles_and_doubles(i_generator,hole_mask,particle_mask,fock_diag_tmp,E0,pt2,b,subset)
+    call select_singles_and_doubles(i_generator,hole_mask,particle_mask,fock_diag_tmp,E0,pt2,b,subset,csubset)
   enddo
   deallocate(fock_diag_tmp)
 end subroutine
@@ -266,7 +266,7 @@ subroutine get_m0(gen, phasemask, bannedOrb, vect, mask, h, p, sp, coefs)
 end 
 
 
-subroutine select_singles_and_doubles(i_generator,hole_mask,particle_mask,fock_diag_tmp,E0,pt2,buf,subset)
+subroutine select_singles_and_doubles(i_generator,hole_mask,particle_mask,fock_diag_tmp,E0,pt2,buf,subset,csubset)
   use bitmasks
   use selection_types
   implicit none
@@ -274,7 +274,7 @@ subroutine select_singles_and_doubles(i_generator,hole_mask,particle_mask,fock_d
 !            WARNING /!\ : It is assumed that the generators and selectors are psi_det_sorted
   END_DOC
   
-  integer, intent(in)            :: i_generator, subset
+  integer, intent(in)            :: i_generator, subset, csubset
   integer(bit_kind), intent(in)  :: hole_mask(N_int,2), particle_mask(N_int,2)
   double precision, intent(in)   :: fock_diag_tmp(mo_tot_num)
   double precision, intent(in)   :: E0(N_states)
@@ -298,7 +298,7 @@ subroutine select_singles_and_doubles(i_generator,hole_mask,particle_mask,fock_d
   integer(bit_kind), allocatable:: preinteresting_det(:,:,:)
   allocate (preinteresting_det(N_int,2,N_det))
 
-  PROVIDE fragment_count
+  !PROVIDE fragment_count
 
   monoAdo = .true.
   monoBdo = .true.
@@ -571,7 +571,7 @@ subroutine select_singles_and_doubles(i_generator,hole_mask,particle_mask,fock_d
           end if
 
           maskInd += 1
-          if(subset == 0 .or. mod(maskInd, fragment_count) == (subset-1)) then  
+          if(mod(maskInd, csubset) == (subset-1)) then  
             
             call spot_isinwf(mask, fullminilist, i_generator, fullinteresting(0), banned, fullMatch, fullinteresting)
             if(fullMatch) cycle

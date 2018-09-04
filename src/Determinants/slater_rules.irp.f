@@ -167,8 +167,7 @@ subroutine decode_exc(exc,degree,h1,p1,h2,p2,s1,s2)
   end select
 end
 
-
-subroutine get_double_excitation(det1,det2,exc,phase,Nint)
+subroutine get_double_excitation_ref(det1,det2,exc,phase,Nint)
   use bitmasks
   implicit none
   BEGIN_DOC
@@ -310,6 +309,137 @@ subroutine get_double_excitation(det1,det2,exc,phase,Nint)
   enddo
   phase = phase_dble(iand(nperm,1))
   
+end
+
+subroutine get_phasemask_bit(det1, pm, Nint)
+  use bitmasks
+  implicit none
+  integer, intent(in) :: Nint
+  integer(bit_kind), intent(in) :: det1(Nint,2)
+  integer(bit_kind), intent(out) :: pm(Nint,2)
+  integer(bit_kind) :: tmp
+ integer :: ispin, i
+  do ispin=1,2
+  tmp = 0_8
+  do i=1,Nint
+    pm(i,ispin) = xor(det1(i,ispin), ishft(det1(i,ispin), 1))
+    pm(i,ispin) = xor(pm(i,ispin), ishft(pm(i,ispin), 2))
+    pm(i,ispin) = xor(pm(i,ispin), ishft(pm(i,ispin), 4))
+    pm(i,ispin) = xor(pm(i,ispin), ishft(pm(i,ispin), 8))
+    pm(i,ispin) = xor(pm(i,ispin), ishft(pm(i,ispin), 16))
+    pm(i,ispin) = xor(pm(i,ispin), ishft(pm(i,ispin), 32))
+    pm(i,ispin) = xor(pm(i,ispin), tmp)
+    if(iand(popcnt(det1(i,ispin)), 1) == 1) tmp = not(tmp)
+  end do
+  end do
+end subroutine
+
+
+subroutine get_double_excitation(det1,det2,exc,phase,Nint)
+  use bitmasks
+  implicit none
+  BEGIN_DOC
+  ! Returns the two excitation operators between two doubly excited determinants and the phase
+  END_DOC
+  integer, intent(in)            :: Nint
+  integer(bit_kind), intent(in)  :: det1(Nint,2)
+  integer(bit_kind), intent(in)  :: det2(Nint,2)
+  integer, intent(out)           :: exc(0:2,2,2)
+  double precision, intent(out)  :: phase
+  integer                        :: tz
+  integer                        :: l, ispin, idx_hole, idx_particle, ishift
+  integer                        :: nperm
+  integer                        :: i,j,k,m,n
+  integer                        :: high, low
+  integer                        :: a,b,c,d
+  integer(bit_kind)              :: hole, particle, tmp, pm(Nint,2)
+  double precision, parameter    :: phase_dble(0:1) = (/ 1.d0, -1.d0 /)
+  double precision :: refaz
+  logical :: ok
+
+  ASSERT (Nint > 0)
+
+  !do ispin=1,2
+  !tmp = 0_8
+  !do i=1,Nint
+  !  pm(i,ispin) = xor(det1(i,ispin), ishft(det1(i,ispin), 1))
+  !  pm(i,ispin) = xor(pm(i,ispin), ishft(pm(i,ispin), 2))
+  !  pm(i,ispin) = xor(pm(i,ispin), ishft(pm(i,ispin), 4))
+  !  pm(i,ispin) = xor(pm(i,ispin), ishft(pm(i,ispin), 8))
+  !  pm(i,ispin) = xor(pm(i,ispin), ishft(pm(i,ispin), 16))
+  !  pm(i,ispin) = xor(pm(i,ispin), ishft(pm(i,ispin), 32))
+  !  pm(i,ispin) = xor(pm(i,ispin), tmp)
+  !  if(iand(popcnt(det1(i,ispin)), 1) == 1) tmp = not(tmp)
+  !end do
+  !end do
+  call get_phasemask_bit(det1, pm, Nint)
+  nperm = 0
+  exc(0,1,1) = 0
+  exc(0,2,1) = 0
+  exc(0,1,2) = 0
+  exc(0,2,2) = 0
+  do ispin = 1,2
+    idx_particle = 0
+    idx_hole = 0
+    ishift = 1-bit_kind_size
+    !par = 0
+    do l=1,Nint
+      ishift = ishift + bit_kind_size
+      if (det1(l,ispin) == det2(l,ispin)) then
+        cycle
+      endif
+      tmp = xor( det1(l,ispin), det2(l,ispin) )
+      particle = iand(tmp, det2(l,ispin))
+      hole     = iand(tmp, det1(l,ispin))
+      do while (particle /= 0_bit_kind)
+        tz = trailz(particle)
+        nperm = nperm + iand(ishft(pm(l,ispin), -tz), 1)
+        idx_particle = idx_particle + 1
+        exc(0,2,ispin) = exc(0,2,ispin) + 1
+        exc(idx_particle,2,ispin) = tz+ishift
+        particle = iand(particle,particle-1_bit_kind)
+      enddo
+      if (iand(exc(0,1,ispin),exc(0,2,ispin))==2) then  ! exc(0,1,ispin)==2 or exc(0,2,ispin)==2
+        exit
+      endif
+      do while (hole /= 0_bit_kind)
+        tz = trailz(hole)
+        nperm = nperm + iand(ishft(pm(l,ispin), -tz), 1)
+        idx_hole = idx_hole + 1
+        exc(0,1,ispin) = exc(0,1,ispin) + 1
+        exc(idx_hole,1,ispin) = tz+ishift
+        hole = iand(hole,hole-1_bit_kind)
+      enddo
+      if (iand(exc(0,1,ispin),exc(0,2,ispin))==2) then ! exc(0,1,ispin)==2 or exc(0,2,ispin)
+        exit
+      endif
+    enddo
+    
+    select case (exc(0,1,ispin))
+      case(0)
+        cycle
+        
+      case(1)
+        if(exc(1,1,ispin) < exc(1,2,ispin)) nperm = nperm+1
+        
+      case (2)
+        a = exc(1,1,ispin)
+        b = exc(1,2,ispin)
+        c = exc(2,1,ispin)
+        d = exc(2,2,ispin)
+        
+        if(min(a,c) > max(b,d) .or. min(b,d) > max(a,c) .or. (a-b)*(c-d)<0) then
+          nperm = nperm + 1
+        end if
+        exit
+    end select
+    
+  enddo
+  phase = phase_dble(iand(nperm,1))
+  !call get_double_excitation_ref(det1,det2,exc,refaz,Nint)
+  !if(phase == refaz) then
+  !  print *, "phase", phase, refaz, n, exc(0,1,1)
+  !end if
 end
 
 subroutine get_mono_excitation(det1,det2,exc,phase,Nint)

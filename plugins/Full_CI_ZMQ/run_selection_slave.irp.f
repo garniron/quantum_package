@@ -177,7 +177,7 @@ subroutine run_selection_slave_old(thread,iproc,energy)
       else
         ASSERT (N == buf%N)
       end if
-      call select_connected(i_generator,energy,pt2,buf,subset)
+      call select_connected(i_generator,energy,pt2,buf,subset,fragment_count)
     endif
 
     integer, external :: task_done_to_taskserver

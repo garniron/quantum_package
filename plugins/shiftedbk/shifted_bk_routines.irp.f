@@ -298,9 +298,8 @@ subroutine dress_with_alpha_buffer(Nstates,Ndet,Nint,delta_ij_loc, i_gen, minili
 
   
   haa =  diag_H_mat_elem_fock(psi_det_generators(1,1,i_gen),alpha,fock_diag_tmp_(1,1,iproc),N_int)
-  
+
   call dress_with_alpha_(Nstates, Ndet, Nint, delta_ij_loc, minilist, det_minilist, n_minilist, alpha, haa, contrib, c_alpha, iproc)
-  
   slave_sum_alpha2(:,iproc) += c_alpha(:)**2
   if(contrib < sb(iproc)%mini) then
     call add_to_selection_buffer(sb(iproc), alpha, contrib)

@@ -87,9 +87,13 @@ double precision :: time, time0
     stop "WORKER -1"
   end if
   iproc = omp_get_thread_num()+1
-  allocate(breve_delta_m(N_states,N_det,2))
+    allocate(breve_delta_m(N_states,N_det,2))
   allocate(task_buf(pt2_n_tasks_max))
   ntask_buf = 0
+  
+  if(iproc==1) then
+    call push_dress_results(zmq_socket_push, 0, 0, edI_task, edI_index, breve_delta_m, task_buf, ntask_buf)
+  end if
 
   do while(cp_done > cp_sent .or. m /= dress_N_cp+1)
     call omp_set_lock(getting_task)

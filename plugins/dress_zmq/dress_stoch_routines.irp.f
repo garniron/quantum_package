@@ -276,7 +276,7 @@ subroutine ZMQ_dress(E, dress, delta_out, delta_s2_out, relative_error)
     
     call omp_set_nested(.true.)
 
-if (.false.) then !! TODO
+if (.true.) then !! TODO
     !$OMP PARALLEL DEFAULT(shared) NUM_THREADS(2)              &
         !$OMP  PRIVATE(i)
     i = omp_get_thread_num()
@@ -462,11 +462,16 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
       end do
       t = dress_dot_t(m)
       avg = S(t) / dble(c)
-      eqt = (S2(t) / c) - (S(t)/c)**2
-      eqt = sqrt(eqt / dble(c-1))
-      error = eqt
-      time = omp_get_wtime()
-      print '(G10.3, 2X, F16.10, 2X, G16.3, 2X, F16.4, A20)', c, avg+E0+E(dress_stoch_istate), eqt, time-time0, ''
+      if (c > 1) then
+        eqt = (S2(t) / c) - (S(t)/c)**2
+        eqt = sqrt(eqt / dble(c-1))
+        error = eqt
+        time = omp_get_wtime()
+        print '(G10.3, 2X, F16.10, 2X, G16.3, 2X, F16.4, A20)', c, avg+E0+E(dress_stoch_istate), eqt, time-time0, ''
+      else
+        eqt = 1.d0
+        error = eqt
+      endif
       m += 1
       if(eqt <= relative_error) then
         integer, external :: zmq_put_dvector

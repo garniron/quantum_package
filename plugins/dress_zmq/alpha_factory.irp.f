@@ -637,7 +637,7 @@ subroutine splash_pq(mask, sp, det, i_gen, N_sel, bannedOrb, banned, indexes, ab
   integer(bit_kind),intent(in)   :: mask(N_int, 2), det(N_int, 2, N_sel)
   logical, intent(inout)         :: bannedOrb(mo_tot_num, 2), banned(mo_tot_num, mo_tot_num, 2)
   integer, intent(inout)         :: indexes(0:mo_tot_num, 0:mo_tot_num)
-  integer, intent(inout) :: abuf(0:*)
+  integer, intent(inout)         :: abuf(*)
   integer                        :: i, ii, j, k, l, h(0:2,2), p(0:4,2), nt, s
   integer(bit_kind)              :: perMask(N_int, 2), mobMask(N_int, 2), negMask(N_int, 2)
   integer :: phasemask(2,N_int*bit_kind_size)

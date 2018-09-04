@@ -65,7 +65,7 @@ END_PROVIDER
 
 BEGIN_PROVIDER [ integer , N_det_delta_ij ]
   implicit none
-  N_det_delta_ij = 1
+  N_det_delta_ij = N_det
 END_PROVIDER
 
 BEGIN_PROVIDER [ double precision, delta_ij, (N_states, N_det, 2) ]

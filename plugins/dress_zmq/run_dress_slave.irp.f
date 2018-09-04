@@ -41,7 +41,7 @@ subroutine run_dress_slave(thread,iproce,energy)
 ! double precision, external :: omp_get_wtime
 double precision :: time, time0
   integer :: ntask_tbd, task_tbd(Nproc), i_gen_tbd(Nproc), subset_tbd(Nproc)
-  if(iproce /= 0) stop "RUN DRESS SLAVE is OMP"
+!  if(iproce /= 0) stop "RUN DRESS SLAVE is OMP"
   
   allocate(delta_det(N_states, N_det, 0:pt2_N_teeth+1, 2))
   allocate(cp(N_states, N_det, dress_N_cp, 2))

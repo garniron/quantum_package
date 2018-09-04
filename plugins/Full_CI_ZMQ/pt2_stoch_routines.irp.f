@@ -258,7 +258,7 @@ subroutine pt2_collector(zmq_socket_pull, E, relative_error, absolute_error, pt2
         pt2(pt2_stoch_istate) = E0-E+avg
         error(pt2_stoch_istate) = eqt
         time = omp_get_wtime()
-        print '(G10.3, 2X, F16.10, 2X, G16.3, 2X, F16.4, A20)', c, avg+E0, eqt, time-time0, ''
+        if(mod(c,10)==1 .or. n==N_det_generators) print '(G10.3, 2X, F16.10, 2X, G16.3, 2X, F16.4, A20)', c, avg+E0, eqt, time-time0, ''
       end if
       n += 1
     else if(more == 0) then

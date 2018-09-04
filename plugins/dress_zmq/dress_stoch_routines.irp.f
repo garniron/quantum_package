@@ -62,7 +62,7 @@ logical function testTeethBuilding(minF, N)
 end function
 
 BEGIN_PROVIDER[ integer, dress_N_cp_max ]
-  dress_N_cp_max = 32
+  dress_N_cp_max = 64
 END_PROVIDER
 
  BEGIN_PROVIDER[integer, pt2_J, (N_det_generators)]

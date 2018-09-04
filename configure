@@ -76,6 +76,11 @@ from collections import namedtuple
 Info = namedtuple("Info", ["url", "description", "default_path"])
 
 path_github = {"head": "http://github.com", "tail": "archive/master.tar.gz"}
+def path_gitlab(user,project,branch):
+  """For example,
+      https://gitlab.com/scemama/resultsFile/-/archive/master/resultsFile-master.tar.gz
+  """
+  return "http://gitlab.com/%(user)s/%(project)s/-/archive/%(branch)s/%(project)s-%(branch)s.tar.gz"%locals()
 
 ocaml = Info(
     url='http://raw.github.com/ocaml/opam/master/shell/opam_installer.sh',
@@ -113,7 +118,7 @@ docopt = Info(
     default_path=join(QP_ROOT_INSTALL, "docopt"))
 
 resultsFile = Info(
-    url='{head}/LCPQ/resultsFile/{tail}'.format(**path_github),
+    url=path_gitlab("scemama","resultsFile","master"),
     description=' resultsFile',
     default_path=join(QP_ROOT_INSTALL, "resultsFile"))
 
@@ -128,17 +133,17 @@ emsl = Info(
     default_path=join(QP_ROOT_INSTALL, "emsl"))
 
 ezfio = Info(
-    url='{head}/LCPQ/EZFIO/{tail}'.format(**path_github),
+    url=path_gitlab("scemama","EZFIO","master"),
     description=' EZFIO',
     default_path=join(QP_ROOT_INSTALL, "EZFIO"))
 
 zeromq = Info(
-    url='https://github.com/zeromq/zeromq4-1/releases/download/v4.1.5/zeromq-4.1.5.tar.gz',
+    url='https://github.com/zeromq/libzmq/archive/v4.2.5.tar.gz',
     description=' ZeroMQ',
     default_path=join(QP_ROOT_LIB, "libzmq.a"))
 
 gmp= Info(
-    url='https://gmplib.org/download/gmp/gmp-6.1.2.tar.bz2',
+    url='ftp://ftp.gnu.org/gnu/gmp/gmp-6.1.2.tar.bz2',
     description=' The GNU Multiple Precision Arithmetic Library',
     default_path=join(QP_ROOT_LIB, "libgmp.a"))
 
@@ -487,9 +492,12 @@ def create_ninja_and_rc(l_installed):
         'export IRPF90={0}'.format(path_irpf90.replace(QP_ROOT,"${QP_ROOT}")),
         'export NINJA={0}'.format(path_ninja.replace(QP_ROOT,"${QP_ROOT}")),
         'function qp_prepend_export () {',
-        '  #Prepend path $2:${!1}. Add the semicolon only if ${!1} is defined',
-        '  eval "value_1=\"\${$1}\""',
-        '  echo ${value_1:+${value_1}:}${2}',
+        'eval "value_1="\${$1}""',
+        'if [[ -z $value_1 ]] ; then',
+        '    echo "${2}:"',
+        'else',
+        '    echo "${2}:${value_1}"',
+        'fi',
         '}',
         'export PYTHONPATH=$(qp_prepend_export "PYTHONPATH" "${QP_EZFIO}/Python":"${QP_PYTHON}")',
         'export PATH=$(qp_prepend_export "PATH" "${QP_PYTHON}":"${QP_ROOT}"/bin:"${QP_ROOT}"/ocaml)',

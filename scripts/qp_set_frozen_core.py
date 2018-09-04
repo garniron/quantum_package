@@ -6,21 +6,26 @@ import sys
 sys.path = [ os.environ["QP_ROOT"]+"/install/EZFIO/Python" ] + sys.path
 from ezfio import ezfio
 
-ezfio.set_filename(sys.argv[1])
+
+filename = sys.argv[1]
+if filename == '-q': filename = sys.argv[2]
+
+ezfio.set_filename(filename)
 
 nb = 0
-for charge in ezfio.nuclei_nucl_charge:
-   if charge < 5:
-      pass
-   elif charge < 13:
-      nb += 1
-   else:
-      nb += 5
+if not ezfio.pseudo_do_pseudo:
+  for charge in ezfio.nuclei_nucl_charge:
+    if charge < 5:
+        pass
+    elif charge < 13:
+        nb += 1
+    else:
+        nb += 5
 
 mo_tot_num = ezfio.mo_basis_mo_tot_num
 
 if len(sys.argv)>2:
-  if sys.argv[2] == '-q':
+  if '-q' in sys.argv:
     print nb
     sys.exit(0)
 

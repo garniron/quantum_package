@@ -29,7 +29,6 @@ END_PROVIDER
  ! For Single reference wave functions, the generator is the
  ! Hartree-Fock determinant
  END_DOC
- integer                        :: i, k
  psi_det_generators(1:N_int,1:2,1:N_det) = psi_det_sorted(1:N_int,1:2,1:N_det)
  psi_coef_generators(1:N_det,1:N_states) = psi_coef_sorted(1:N_det,1:N_states)
 
@@ -44,12 +43,9 @@ END_PROVIDER
  ! For Single reference wave functions, the generator is the
  ! Hartree-Fock determinant
  END_DOC
- integer                        :: i, k
  psi_det_sorted_gen = psi_det_sorted
  psi_coef_sorted_gen = psi_coef_sorted
- !do i=1,N_det_generators
-   psi_det_sorted_gen_order = psi_det_sorted_order
- !end do
+ psi_det_sorted_gen_order = psi_det_sorted_order
 END_PROVIDER
 
 

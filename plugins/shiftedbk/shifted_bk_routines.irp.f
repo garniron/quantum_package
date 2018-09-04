@@ -16,21 +16,22 @@ END_PROVIDER
 &BEGIN_PROVIDER [ type(selection_buffer), global_sb ]
 &BEGIN_PROVIDER [ type(selection_buffer), mini_sb ]
 &BEGIN_PROVIDER [ double precision, N_det_increase_factor ]
-  implicit none
-  integer :: i
-  
- N_det_increase_factor = 1d0
-  
-
-  n_det_add = max(1, int(float(N_det) * N_det_increase_factor))
-  call create_selection_buffer(n_det_add, n_det_add*2, global_sb)
-  call create_selection_buffer(n_det_add, n_det_add*2, mini_sb)
-  do i=1,Nproc
-    call create_selection_buffer(n_det_add, n_det_add*2, sb(i))
-  end do
-  a_h_i = 0d0
-  a_s2_i = 0d0
- END_PROVIDER
+   implicit none
+   fock_diag_tmp_(:,:,:) = 0.d0
+   integer                        :: i
+   
+   N_det_increase_factor = dble(N_states)
+   
+   
+   n_det_add = max(1, int(float(N_det) * N_det_increase_factor))
+   call create_selection_buffer(n_det_add, n_det_add*2, global_sb)
+   call create_selection_buffer(n_det_add, n_det_add*2, mini_sb)
+   do i=1,Nproc
+     call create_selection_buffer(n_det_add, n_det_add*2, sb(i))
+   end do
+   a_h_i = 0d0
+   a_s2_i = 0d0
+END_PROVIDER
 
 
  BEGIN_PROVIDER [ integer, N_dress_int_buffer ]
@@ -50,6 +51,7 @@ subroutine generator_done(i_gen, int_buf, double_buf, det_buf, N_buf, iproc)
   double precision, intent(out) :: double_buf(N_dress_double_buffer)
   integer(bit_kind), intent(out) :: det_buf(N_int, 2, N_dress_det_buffer)
   integer :: i
+  int_buf(:) = 0
   
     call sort_selection_buffer(sb(iproc))
    
@@ -118,15 +120,17 @@ subroutine delta_ij_done()
   old_det_gen = N_det_generators
  
 
+  ! Add buffer only when the last state is computed
+  call unique_selection_buffer(global_sb)
   call sort_selection_buffer(global_sb)
   call fill_H_apply_buffer_no_selection(global_sb%cur,global_sb%det,N_int,0) 
   call copy_H_apply_buffer_to_wf()
-
   if (s2_eig.or.(N_states > 1) ) then
     call make_s2_eigenfunction
   endif
   call undress_with_alpha(old_generators, old_det_gen, psi_det(1,1,N_det_delta_ij+1), N_det-N_det_delta_ij)
   call save_wavefunction
+
 end subroutine
 
 
@@ -253,7 +257,7 @@ subroutine dress_with_alpha_(Nstates,Ndet,Nint,delta_ij_loc,minilist, det_minili
   contrib = 0d0
 
   do i=1,Nstates
-    de = E0_denominator(i) - haa
+    de = dress_E0_denominator(i) - haa
     if(DABS(de) < 1D-5) cycle
 
     c_alpha(i) = a_h_psi(i) / de
@@ -311,24 +315,5 @@ BEGIN_PROVIDER [ logical, initialize_E0_denominator ]
     initialize_E0_denominator = .True.
 END_PROVIDER
 
-
-BEGIN_PROVIDER [ double precision, E0_denominator, (N_states) ]
-  implicit none
-  BEGIN_DOC
-  ! E0 in the denominator of the PT2
-  END_DOC
-  if (initialize_E0_denominator) then
-   if (h0_type == "EN") then
-     E0_denominator(1:N_states) = psi_energy(1:N_states)
-   else if (h0_type == "Barycentric") then
-     E0_denominator(1:N_states) = barycentric_electronic_energy(1:N_states)
-   else
-     print *,  h0_type, ' not implemented'
-     stop
-   endif
-  else
-    E0_denominator = -huge(1.d0)
-  endif
-END_PROVIDER
 
 

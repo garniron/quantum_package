@@ -65,52 +65,51 @@ subroutine run
       enddo
       !$OMP END PARALLEL DO
     endif
-    if (ci_threshold > norm_sort(j)) then
-      cycle
+    if (ci_threshold <= norm_sort(j)) then
+      exit
     endif
-
-    u_0(1:N_det,1:N_states) = psi_bilinear_matrix_values(1:N_det,1:N_states)
-    v_0(1:N_det,1:N_states) = 0.d0
-    u_t(1:N_states,1:N_det) = 0.d0
-    v_t(1:N_states,1:N_det) = 0.d0
-    s_t(1:N_states,1:N_det) = 0.d0
-    call dtranspose(                                                   &
-        u_0,                                                           &
-        size(u_0, 1),                                                  &
-        u_t,                                                           &
-        size(u_t, 1),                                                  &
-        N_det, N_states)
-    print *, 'Computing H|Psi> ...'
-    call H_S2_u_0_nstates_openmp_work(v_t,s_t,u_t,N_states,N_det,1,N_det,0,1)
-    print *, 'Done'
-    call dtranspose(                                                   &
-        v_t,                                                           &
-        size(v_t, 1),                                                  &
-        v_0,                                                           &
-        size(v_0, 1),                                                  &
-        N_states, N_det)
-    
-    double precision, external :: u_dot_u, u_dot_v
-    do i=1,N_states
-      e_0(i) = u_dot_v(u_0(1,i),v_0(1,i),N_det)/u_dot_u(u_0(1,i),N_det)
-      print *,  'E = ', e_0(i) + nuclear_repulsion
-    enddo
-
-    m = 0
-    do k=1,n_det
-     if (sum(psi_bilinear_matrix_values(k,1:N_states)) /= 0.d0) then
-      m = m+1
-     endif
-    enddo
-
-    do k=1,N_states
-      E = E_0(k) + nuclear_repulsion
-    enddo
-    print *,  'Number of determinants:', m
-    exit
   enddo
+
+  m = 0
+  do k=1,n_det
+    if (sum(psi_bilinear_matrix_values(k,1:N_states)) /= 0.d0) then
+    m = m+1
+    endif
+  enddo
+
+  do k=1,N_states
+    E = E_0(k) + nuclear_repulsion
+  enddo
+  print *,  'Number of determinants:', m
   call wf_of_psi_bilinear_matrix(.True.)
   call save_wavefunction
+
+  u_0(1:N_det,1:N_states) = psi_bilinear_matrix_values(1:N_det,1:N_states)
+  v_0(1:N_det,1:N_states) = 0.d0
+  u_t(1:N_states,1:N_det) = 0.d0
+  v_t(1:N_states,1:N_det) = 0.d0
+  s_t(1:N_states,1:N_det) = 0.d0
+  call dtranspose(                                                   &
+      u_0,                                                           &
+      size(u_0, 1),                                                  &
+      u_t,                                                           &
+      size(u_t, 1),                                                  &
+      N_det, N_states)
+  print *, 'Computing H|Psi> ...'
+  call H_S2_u_0_nstates_openmp_work(v_t,s_t,u_t,N_states,N_det,1,N_det,0,1)
+  print *, 'Done'
+  call dtranspose(                                                   &
+      v_t,                                                           &
+      size(v_t, 1),                                                  &
+      v_0,                                                           &
+      size(v_0, 1),                                                  &
+      N_states, N_det)
+  
+  double precision, external :: u_dot_u, u_dot_v
+  do i=1,N_states
+    e_0(i) = u_dot_v(u_0(1,i),v_0(1,i),N_det)/u_dot_u(u_0(1,i),N_det)
+    print *,  'E(',i,') = ', e_0(i) + nuclear_repulsion
+  enddo
 
   deallocate (iorder, norm_sort)
 end

@@ -403,8 +403,8 @@ BEGIN_PROVIDER [ integer, nthreads_davidson ]
  call getenv('NTHREADS_DAVIDSON',env)
  if (trim(env) /= '') then
    read(env,*) nthreads_davidson
+   call write_int(6,nthreads_davidson,'Number of threads for <Psi|H|Psi>')
  endif
- call write_int(6,nthreads_davidson,'Number of threads for Diagonalization')
 END_PROVIDER
 
 

@@ -53,13 +53,14 @@ subroutine dress_with_alpha_buffer(Nstates,Ndet,Nint,delta_ij_loc, i_gen, minili
     do i_state=1,N_states
       hdress = c_alpha(i_state) * i_h_alpha
       sdress = c_alpha(i_state) * i_s_alpha
+      !$OMP ATOMIC
       delta_ij_loc(i_state,j,1) = delta_ij_loc(i_state,j,1) + hdress
+      !$OMP ATOMIC
       delta_ij_loc(i_state,j,2) = delta_ij_loc(i_state,j,2) + sdress
     enddo
   enddo
 
 
 end subroutine
-
 
 

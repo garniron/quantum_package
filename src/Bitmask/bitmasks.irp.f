@@ -21,14 +21,17 @@ BEGIN_PROVIDER [ integer(bit_kind), full_ijkl_bitmask, (N_int) ]
   ! Bitmask to include all possible MOs
   END_DOC
   
-  integer                        :: i,j,n
-  n = mod(mo_tot_num-1,bit_kind_size)+1
-  full_ijkl_bitmask = 0_bit_kind
-  do i=1,N_int-1
-    full_ijkl_bitmask(i) = not(0_bit_kind)
-  enddo
-  do i=1,n
-    full_ijkl_bitmask(N_int) = ibset(full_ijkl_bitmask(N_int),i-1)
+  integer                        :: i,j,k
+  k=0
+  do j=1,N_int
+    full_ijkl_bitmask(j) = 0_bit_kind
+    do i=0,bit_kind_size-1
+      k=k+1
+      if (mo_class(k) /= 'Deleted') then
+        full_ijkl_bitmask(j) = ibset(full_ijkl_bitmask(j),i)
+      endif
+      if (k == mo_tot_num) exit
+    enddo
   enddo
 END_PROVIDER
 
@@ -559,7 +562,7 @@ END_PROVIDER
  n_core_inact_act_orb = 0
  do i = 1, N_int
   reunion_of_core_inact_act_bitmask(i,1) = ior(reunion_of_core_inact_bitmask(i,1),cas_bitmask(i,1,1))
-  reunion_of_core_inact_act_bitmask(i,2) = ior(reunion_of_core_inact_bitmask(i,2),cas_bitmask(i,1,1))
+  reunion_of_core_inact_act_bitmask(i,2) = ior(reunion_of_core_inact_bitmask(i,2),cas_bitmask(i,2,1))
   n_core_inact_act_orb +=popcnt(reunion_of_core_inact_act_bitmask(i,1))
  enddo
  END_PROVIDER

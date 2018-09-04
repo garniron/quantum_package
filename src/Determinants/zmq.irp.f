@@ -304,7 +304,7 @@ integer function zmq_get_psi_det(zmq_to_qp_run_socket, worker_id)
     if (ierr /= MPI_SUCCESS) then
       stop 'Unable to broadcast zmq_get_psi_det'
     endif
-    call broadcast_chunks_bit_kind(psi_det,N_det*N_int*2)
+    call broadcast_chunks_bit_kind(psi_det,size(psi_det))
   IRP_ENDIF
 
 end
@@ -353,7 +353,7 @@ integer function zmq_get_psi_coef(zmq_to_qp_run_socket, worker_id)
     if (ierr /= MPI_SUCCESS) then
       stop 'Unable to broadcast zmq_get_psi_coef'
     endif
-    call broadcast_chunks_double(psi_coef,N_states*N_det)
+    call broadcast_chunks_double(psi_coef,size(psi_coef))
   IRP_ENDIF
 
 end

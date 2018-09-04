@@ -11,7 +11,8 @@ function _install()
   set -u
   ORIG=$(pwd)
   cd "${BUILD}"
-  ./configure --prefix=$QP_ROOT --without-libsodium || exit 1
+  ./autogen.sh
+  ./configure --prefix=$QP_ROOT --without-libsodium --disable-libunwind || exit 1
   make -j 8 || exit 1
   make install || exit 1
   cd ${ORIG}

@@ -367,13 +367,13 @@ end
    j = psi_bilinear_matrix_columns(k)
    f = 0.d0
    do l=1,N_states
-    f += psi_bilinear_matrix_values(k,l)*psi_bilinear_matrix_values(k,l)
+    f += psi_bilinear_matrix_values(k,l)*psi_bilinear_matrix_values(k,l) * state_average_weight(l)
    enddo
    det_alpha_norm(i) += f
    det_beta_norm(j)  += f
  enddo
- det_alpha_norm = det_alpha_norm / dble(N_states)
- det_beta_norm = det_beta_norm / dble(N_states)
+ det_alpha_norm = det_alpha_norm 
+ det_beta_norm = det_beta_norm 
 
 END_PROVIDER
 
@@ -649,7 +649,7 @@ subroutine create_wf_of_psi_bilinear_matrix(truncate)
         do k=1,N_states
           psi_coef_sorted_bit(idx,k) = psi_bilinear_matrix(i,j,k) 
           !$OMP ATOMIC
-          norm(k) += psi_bilinear_matrix(i,j,k)
+          norm(k) += psi_bilinear_matrix(i,j,k)*psi_bilinear_matrix(i,j,k)
         enddo
       endif
     enddo
@@ -671,7 +671,10 @@ subroutine create_wf_of_psi_bilinear_matrix(truncate)
   do i=1,N_det
     norm(1) += psi_average_norm_contrib_sorted(i)
     if (truncate) then
-      if (norm(1) >= 0.999999d0) then
+      if (norm(1) >= 1.d0) then
+        exit
+      endif
+      if (psi_average_norm_contrib_sorted(i) == 0.d0) then
         exit
       endif
     endif

@@ -84,8 +84,8 @@ let input_data = "
 * MO_coef : float
 
 * MO_occ : float
-  if (x < 0.) || (x > 2.) then
-    raise (Invalid_argument (Printf.sprintf \"MO_occ : (0. <= x <= 2.) : x=%f\" x)); 
+  if x < 0. then 0.  else 
+  if x > 2. then 2.  else
 
 * AO_coef : float
 

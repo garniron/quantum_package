@@ -6,7 +6,7 @@ subroutine dress_zmq()
   threshold_generators = 1d0 
 
   read_wf = .True.
-  SOFT_TOUCH read_wf
+  SOFT_TOUCH read_wf threshold_generators threshold_selectors
   
   if (.True.) then
     integer :: i,j

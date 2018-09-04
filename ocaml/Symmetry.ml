@@ -16,30 +16,30 @@ let to_string = function
   | L -> "L"
 
 let of_string = function
-  | "S" -> S
-  | "P" -> P
-  | "D" -> D
-  | "F" -> F
-  | "G" -> G
-  | "H" -> H
-  | "I" -> I
-  | "J" -> J
-  | "K" -> K
-  | "L" -> L
+  | "S" | "s" -> S
+  | "P" | "p" -> P
+  | "D" | "d" -> D
+  | "F" | "f" -> F
+  | "G" | "g" -> G
+  | "H" | "h" -> H
+  | "I" | "i" -> I
+  | "J" | "j" -> J
+  | "K" | "k" -> K
+  | "L" | "l" -> L
   | x -> raise (Failure ("Symmetry should be S|P|D|F|G|H|I|J|K|L,
 not "^x^"."))
 
 let of_char = function
-  | 'S' -> S
-  | 'P' -> P
-  | 'D' -> D
-  | 'F' -> F
-  | 'G' -> G
-  | 'H' -> H
-  | 'I' -> I
-  | 'J' -> J
-  | 'K' -> K
-  | 'L' -> L
+  | 'S' | 's' -> S
+  | 'P' | 'p' -> P
+  | 'D' | 'd' -> D
+  | 'F' | 'f' -> F
+  | 'G' | 'g' -> G
+  | 'H' | 'h' -> H
+  | 'I' | 'i' -> I
+  | 'J' | 'j' -> J
+  | 'K' | 'k' -> K
+  | 'L' | 'l' -> L
   | x -> raise (Failure ("Symmetry should be S|P|D|F|G|H|I|J|K|L"))
 
 let to_l = function

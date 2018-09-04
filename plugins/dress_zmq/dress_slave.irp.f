@@ -28,7 +28,7 @@ subroutine run_wf
   double precision :: energy(N_states_diag)
   character*(64) :: states(1)
   integer :: rc, i
-integer, external              :: zmq_get_dvector, zmq_get_N_det_generators 
+  integer, external              :: zmq_get_dvector, zmq_get_N_det_generators 
   integer, external              :: zmq_get_psi, zmq_get_N_det_selectors
   integer, external              :: zmq_get_N_states_diag
   double precision               :: tmp
@@ -50,19 +50,15 @@ integer, external              :: zmq_get_dvector, zmq_get_N_det_generators
     else if (zmq_state(:5) == 'dress') then
       ! Dress
       ! ---------
-      !call zmq_get_psi(zmq_to_qp_run_socket,1,energy,N_states)
       if (zmq_get_psi(zmq_to_qp_run_socket,1) == -1) cycle
-      !TOUCH psi_det
       if (zmq_get_N_det_generators (zmq_to_qp_run_socket, 1) == -1) cycle
       if (zmq_get_N_det_selectors(zmq_to_qp_run_socket, 1) == -1) cycle
       if (zmq_get_dvector(zmq_to_qp_run_socket,1,'state_average_weight',state_average_weight,N_states) == -1) cycle
       if (zmq_get_dvector(zmq_to_qp_run_socket,1,'energy',energy,N_states) == -1) cycle
       if (zmq_get_dvector(zmq_to_qp_run_socket,1,'dress_stoch_istate',tmp,1) == -1) cycle
       dress_stoch_istate = int(tmp)
-      
-      
-      TOUCH dress_stoch_istate
-      TOUCH state_average_weight
+      psi_energy(1:N_states) = energy(1:N_states)
+      TOUCH psi_energy dress_stoch_istate state_average_weight 
 
       PROVIDE psi_bilinear_matrix_columns_loc psi_det_alpha_unique psi_det_beta_unique
       PROVIDE psi_bilinear_matrix_rows psi_det_sorted_gen_order psi_bilinear_matrix_order

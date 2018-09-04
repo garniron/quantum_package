@@ -450,15 +450,15 @@ subroutine mrsc2_dressing_collector(zmq_socket_pull,delta_ij_,delta_ij_s2_)
 
       do l=1, n(1)
         do i_state=1,N_states
-          delta_ij_(i_state,idx(l,1)) += delta(i_state,l,1) * psi_ref_coef(i_I,i_state) * c0(i_state)
-          delta_ij_s2_(i_state,idx(l,1)) += delta_s2(i_state,l,1) * psi_ref_coef(i_I,i_state) * c0(i_state)
+          delta_ij_(i_state,idx(l,1)) += delta(i_state,l,1) * psi_ref_coef(i_I,i_state)
+          delta_ij_s2_(i_state,idx(l,1)) += delta_s2(i_state,l,1) * psi_ref_coef(i_I,i_state)
         end do
       end do
       
       do l=1, n(2)
         do i_state=1,N_states
-          delta_ij_(i_state,idx(l,2)) += delta(i_state,l,2) * psi_ref_coef(J,i_state) * c0(i_state)
-          delta_ij_s2_(i_state,idx(l,2)) += delta_s2(i_state,l,2) * psi_ref_coef(J,i_state) * c0(i_state)
+          delta_ij_(i_state,idx(l,2)) += delta(i_state,l,2) * psi_ref_coef(J,i_state)
+          delta_ij_s2_(i_state,idx(l,2)) += delta_s2(i_state,l,2) * psi_ref_coef(J,i_state)
         end do
       end do
 

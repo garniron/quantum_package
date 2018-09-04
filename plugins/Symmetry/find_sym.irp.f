@@ -6,34 +6,6 @@ BEGIN_PROVIDER [ logical, molecule_is_linear ]
  molecule_is_linear = (minval(inertia_tensor_eigenvalues) < 1.d-5)
 END_PROVIDER
 
-BEGIN_PROVIDER [ logical, molecule_has_center_of_inversion ]
-  implicit none
-  BEGIN_DOC
-  ! If true, there is a center of inversion in the WF
-  END_DOC
-  molecule_has_center_of_inversion = .True.
-  integer                        :: i,j,k
-  double precision               :: point(3)
-  logical                        :: found
-  double precision, external     :: u_dot_u
-  do i=1,nucl_num
-    found = .False.
-    do j=1,nucl_num
-      if (nucl_charge(i) /= nucl_charge(j)) cycle
-      point(:) = nucl_coord_sym_transp(:,i) + nucl_coord_sym_transp(:,j)
-      if (u_dot_u(point,3) < 1.d-5) then
-        found = .True.
-        exit
-      endif
-    enddo
-    if (.not.found) then
-      molecule_has_center_of_inversion = .False.
-      exit
-    endif
-  enddo
-
-END_PROVIDER
-
 
 BEGIN_PROVIDER [ integer, sym_rotation_axis, (3) ]
   implicit none

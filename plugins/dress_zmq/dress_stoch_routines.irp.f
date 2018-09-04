@@ -274,16 +274,27 @@ subroutine ZMQ_dress(E, dress, delta_out, delta_s2_out, relative_error)
       print *,  irp_here, ': Failed in zmq_set_running'
     endif
     
-    !!$OMP PARALLEL DEFAULT(shared) NUM_THREADS(nproc)              &
-    !    !$OMP  PRIVATE(i)
-    !i = omp_get_thread_num()
-    !if (i==0) then
+    call omp_set_nested(.true.)
+
+if (.true.) then !! TODO
+    !$OMP PARALLEL DEFAULT(shared) NUM_THREADS(2)              &
+        !$OMP  PRIVATE(i)
+    i = omp_get_thread_num()
+    if (i==0) then
       call dress_collector(zmq_socket_pull,E, relative_error, delta, delta_s2, dress,&
          dress_stoch_istate)
-    !else
-    !  call dress_slave_inproc(i)
-    !endif
-    !!$OMP END PARALLEL
+    else
+      call dress_slave_inproc(i)
+    endif
+    !$OMP END PARALLEL
+
+else
+
+    call dress_collector(zmq_socket_pull,E, relative_error, delta, delta_s2, dress,&
+         dress_stoch_istate)
+endif
+
+    call omp_set_nested(.false.)
     delta_out(dress_stoch_istate,1:N_det) = delta(dress_stoch_istate,1:N_det)
     delta_s2_out(dress_stoch_istate,1:N_det) = delta_s2(dress_stoch_istate,1:N_det)
     
@@ -451,13 +462,18 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
       end do
       t = dress_dot_t(m)
       avg = S(t) / dble(c)
-      eqt = (S2(t) / c) - (S(t)/c)**2
-      eqt = sqrt(eqt / dble(c-1))
-      error = eqt
-      time = omp_get_wtime()
-      print '(G10.3, 2X, F16.10, 2X, G16.3, 2X, F16.4, A20)', c, avg+E0+E(dress_stoch_istate), eqt, time-time0, ''
+      if (c > 1) then
+        eqt = (S2(t) / c) - (S(t)/c)**2
+        eqt = sqrt(eqt / dble(c-1))
+        error = eqt
+        time = omp_get_wtime()
+        print '(G10.3, 2X, F16.10, 2X, G16.3, 2X, F16.4, A20)', c, avg+E0+E(dress_stoch_istate), eqt, time-time0, ''
+      else
+        eqt = 1.d0
+        error = eqt
+      endif
       m += 1
-      if(eqt <= relative_error) then
+      if(eqt <=0d0* relative_error) then
         integer, external :: zmq_put_dvector
         i= zmq_put_dvector(zmq_to_qp_run_socket, worker_id, "ending", dble(m-1), 1)
         found = .true.
@@ -480,6 +496,7 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
         end if
       end do
       do i=1,n_tasks
+        if(edI(1, edI_index(i)) /= 0d0) stop "NIN M"
         edI(:, edI_index(i)) += edI_task(:, i) 
       end do
       dot_f(m_task) -= f
@@ -515,6 +532,16 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
   end do
   dress(istate) = E(istate)+E0+avg
   if(ff /= 0) stop "WRONG NUMBER OF FRAGMENTS COLLECTED"
+  !double precision :: tmp
+  
+  !tmp = 0d0
+
+  !do i=1,N_det
+  !  if(edi(1,i) == 0d0) stop "EMPTY"
+  !  tmp += psi_coef(i, 1) * delta(1, i)
+  !end do
+  !print *, "SUM", E(1)+sum(edi(1,:))
+  !print *, "DOT", E(1)+tmp
   call disconnect_from_taskserver(zmq_to_qp_run_socket,worker_id)
   call end_zmq_to_qp_run_socket(zmq_to_qp_run_socket)
 end subroutine
@@ -599,8 +626,5 @@ end function
   end do
   pt2_n_0(pt2_N_teeth+1) = N_det_generators
 END_PROVIDER
-
-
-
 
 

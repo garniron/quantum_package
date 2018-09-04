@@ -28,6 +28,7 @@ subroutine H_S2_u_0_nstates_openmp(v_0,s_0,u_0,N_st,sze)
   double precision, allocatable  :: u_t(:,:), v_t(:,:), s_t(:,:)
   !DIR$ ATTRIBUTES ALIGN : $IRP_ALIGN :: u_t
   allocate(u_t(N_st,N_det),v_t(N_st,N_det),s_t(N_st,N_det))
+
   do k=1,N_st
     call dset_order(u_0(1,k),psi_bilinear_matrix_order,N_det)
   enddo

@@ -9,7 +9,7 @@ use bitmasks
  ! function.
  END_DOC
  call sort_dets_by_det_search_key(N_det_ref, psi_ref, psi_ref_coef, &
-     psi_ref_sorted_bit, psi_ref_coef_sorted_bit)
+     psi_ref_sorted_bit, psi_ref_coef_sorted_bit, N_states)
 
 END_PROVIDER
 
@@ -152,7 +152,7 @@ END_PROVIDER
  ! function.
  END_DOC
  call sort_dets_by_det_search_key(N_det_ref, psi_non_ref, psi_non_ref_coef, &
-     psi_non_ref_sorted_bit, psi_non_ref_coef_sorted_bit)
+     psi_non_ref_sorted_bit, psi_non_ref_coef_sorted_bit, N_states)
 
 END_PROVIDER
 

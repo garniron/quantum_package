@@ -189,8 +189,8 @@ subroutine S2_u_0_nstates(v_0,u_0,n,keys_tmp,Nint,N_st,sze_8)
   allocate(vt(sze_8,N_st))
   vt = 0.d0
   
-  !$OMP DO SCHEDULE(dynamic)
   do sh=1,shortcut(0,1)
+    !$OMP DO SCHEDULE(static,1)
     do sh2=sh,shortcut(0,1)
       exa = 0
       do ni=1,Nint
@@ -227,11 +227,11 @@ subroutine S2_u_0_nstates(v_0,u_0,n,keys_tmp,Nint,N_st,sze_8)
         enddo
       enddo
     enddo
+    !$OMP END DO NOWAIT
   enddo
-  !$OMP END DO NOWAIT
   
-  !$OMP DO SCHEDULE(dynamic)
   do sh=1,shortcut(0,2)
+    !$OMP DO 
     do i=shortcut(sh,2),shortcut(sh+1,2)-1
       org_i = sort_idx(i,2)
       do j=shortcut(sh,2),i-1
@@ -249,8 +249,9 @@ subroutine S2_u_0_nstates(v_0,u_0,n,keys_tmp,Nint,N_st,sze_8)
         end if
       end do
     end do
+    !$OMP END DO NOWAIT
   enddo
-  !$OMP END DO NOWAIT
+  !$OMP BARRIER
   
   do istate=1,N_st
     do i=n,1,-1

@@ -347,7 +347,8 @@ subroutine set_natural_mos
  double precision, allocatable :: tmp(:,:)
 
  label = "Natural"
- call mo_as_svd_vectors_of_mo_matrix(one_body_dm_mo,size(one_body_dm_mo,1),mo_tot_num,mo_tot_num,label)
+ call mo_as_svd_vectors_of_mo_matrix_eig(one_body_dm_mo,size(one_body_dm_mo,1),mo_tot_num,mo_tot_num,mo_occ,label)
+ soft_touch mo_occ
 
 end
 subroutine save_natural_mos
@@ -361,6 +362,57 @@ subroutine save_natural_mos
 end
 
 
+BEGIN_PROVIDER [ double precision, l3_weight, (N_states) ]
+ implicit none
+ BEGIN_DOC
+ ! Weight of the states in the selection : 1/(sum_i |c_i|^3)
+ END_DOC
+ integer :: i,k
+ double precision :: c
+ do i=1,N_states
+   l3_weight(i) = 1.d-31
+   do k=1,N_det
+    c = psi_coef(k,i)*psi_coef(k,i)
+    l3_weight(i) = l3_weight(i) + c*abs(psi_coef(k,i))
+   enddo
+   l3_weight(i) = min(1.d0/l3_weight(i), 100.d0)
+ enddo
+ if (mpi_master) then
+    print *,  ''
+    print *,  'L3 weights'
+    print *,  '----------'
+    print *,  ''
+    print *,  l3_weight(1:N_states)
+    print *,  ''
+ endif
+
+END_PROVIDER
+
+BEGIN_PROVIDER [ double precision, c0_weight, (N_states) ]
+ implicit none
+ BEGIN_DOC
+ ! Weight of the states in the selection : 1/c_0^2
+ END_DOC
+ integer :: i,k
+ double precision :: c
+ do i=1,N_states
+   c0_weight(i) = 1.d-31
+   c = maxval(psi_coef(:,i) * psi_coef(:,i))
+   c0_weight(i) = 1.d0/c
+   c0_weight(i) = min(c0_weight(i), 100.d0)
+ enddo
+ if (mpi_master) then
+    print *,  ''
+    print *,  'c0 weights'
+    print *,  '----------'
+    print *,  ''
+    print *,  c0_weight(1:N_states)
+    print *,  ''
+ endif
+
+END_PROVIDER
+
+
 BEGIN_PROVIDER [ double precision, state_average_weight, (N_states) ]
  implicit none
  BEGIN_DOC
@@ -369,9 +421,17 @@ BEGIN_PROVIDER [ double precision, state_average_weight, (N_states) ]
  logical :: exists
 
  state_average_weight(:) = 1.d0
- call ezfio_has_determinants_state_average_weight(exists)
- if (exists) then
-  call ezfio_get_determinants_state_average_weight(state_average_weight)
+ if (used_weight == 0) then
+  state_average_weight(:) = c0_weight(:)
+ else if (used_weight == 1) then
+  state_average_weight(:) = 1./N_states
+ else if (used_weight == 3) then
+  state_average_weight(:) = l3_weight
+ else
+  call ezfio_has_determinants_state_average_weight(exists)
+  if (exists) then
+    call ezfio_get_determinants_state_average_weight(state_average_weight)
+  endif
  endif
  state_average_weight(:) = state_average_weight(:)+1.d-31
  state_average_weight(:) = state_average_weight(:)/(sum(state_average_weight(:)))

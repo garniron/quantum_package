@@ -35,10 +35,10 @@ END_PROVIDER
   integer, external :: number_of_holes,number_of_particles
   integer, allocatable :: nongen(:)
   integer :: inongen
-  inongen = 0
 
   allocate(nongen(N_det))
 
+  inongen = 0
   m=0
   do i=1,N_det
     good = ( number_of_holes(psi_det_sorted(1,1,i)) ==0).and.(number_of_particles(psi_det_sorted(1,1,i))==0 )

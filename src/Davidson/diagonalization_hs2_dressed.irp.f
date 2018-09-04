@@ -35,7 +35,7 @@ subroutine davidson_diag_hs2(dets_in,u_in,s2_out,dim_in,energies,sze,N_st,N_st_d
   double precision, intent(inout) :: u_in(dim_in,N_st_diag)
   double precision, intent(out)  :: energies(N_st_diag), s2_out(N_st_diag)
   integer, intent(in)            :: dressing_state
-  double precision, allocatable  :: H_jj(:), S2_jj(:)
+  double precision, allocatable  :: H_jj(:)
   
   double precision, external     :: diag_H_mat_elem, diag_S_mat_elem
   integer                        :: i,k
@@ -44,7 +44,7 @@ subroutine davidson_diag_hs2(dets_in,u_in,s2_out,dim_in,energies,sze,N_st,N_st_d
   ASSERT (Nint > 0)
   ASSERT (Nint == N_int)
   PROVIDE mo_bielec_integrals_in_map
-  allocate(H_jj(sze),S2_jj(sze))
+  allocate(H_jj(sze))
   
   H_jj(1) = diag_h_mat_elem(dets_in(1,1,1),Nint)
   !$OMP PARALLEL DEFAULT(NONE)                                       &
@@ -60,17 +60,32 @@ subroutine davidson_diag_hs2(dets_in,u_in,s2_out,dim_in,energies,sze,N_st,N_st_d
   if (dressing_state > 0) then
     do k=1,N_st
       do i=1,sze
-        H_jj(i) += u_in(i,k) * dressing_column_h(i,k)
+        H_jj(i)  += u_in(i,k) * dressing_column_h(i,k)
       enddo
     enddo
   endif
 
-  call davidson_diag_hjj_sjj(dets_in,u_in,H_jj,S2_out,energies,dim_in,sze,N_st,N_st_diag,Nint,dressing_state)
-  deallocate (H_jj,S2_jj)
+  integer :: N_st_diag_local
+  double precision, allocatable :: energies_local(:), s2_out_local(:), u_in_local(:,:)
+  logical :: converged
+  converged = .False.
+  call davidson_diag_hjj_sjj(dets_in,u_in,H_jj,S2_out,energies,dim_in,sze,N_st,N_st_diag,Nint,dressing_state,converged)
+  N_st_diag_local = N_st_diag
+  do while (.not.converged)
+    N_st_diag_local = 2 * N_st_diag_local
+    allocate (energies_local(N_st_diag_local), s2_out_local(N_st_diag_local), u_in_local(sze,N_st_diag_local))
+    u_in_local(1:sze,1:N_st_diag) = u_in(1:sze,1:N_st_diag) 
+    call davidson_diag_hjj_sjj(dets_in,u_in_local,H_jj,s2_out_local,energies_local,dim_in,sze,N_st,N_st_diag_local,Nint,dressing_state,converged)
+    energies(1:N_st_diag) = energies_local(1:N_st_diag)
+    s2_out(1:N_st_diag) = s2_out_local(1:N_st_diag)
+    u_in(1:sze,1:N_st_diag) = u_in_local(1:sze,1:N_st_diag)
+    deallocate (energies_local, s2_out_local, u_in_local)
+  enddo
+  deallocate (H_jj)
 end
 
 
-subroutine davidson_diag_hjj_sjj(dets_in,u_in,H_jj,s2_out,energies,dim_in,sze,N_st,N_st_diag,Nint,dressing_state)
+subroutine davidson_diag_hjj_sjj(dets_in,u_in,H_jj,s2_out,energies,dim_in,sze,N_st,N_st_diag,Nint,dressing_state,converged)
   use bitmasks
   implicit none
   BEGIN_DOC
@@ -105,13 +120,13 @@ subroutine davidson_diag_hjj_sjj(dets_in,u_in,H_jj,s2_out,energies,dim_in,sze,N_
   
   integer                        :: iter
   integer                        :: i,j,k,l,m
-  logical                        :: converged
+  logical, intent(inout)         :: converged
   
   double precision, external     :: u_dot_v, u_dot_u
   
   integer                        :: k_pairs, kl
   
-  integer                        :: iter2
+  integer                        :: iter2, itertot
   double precision, allocatable  :: W(:,:),  U(:,:), S(:,:), overlap(:,:)
   double precision, allocatable  :: y(:,:), h(:,:), lambda(:), s2(:)
   double precision, allocatable  :: c(:), s_(:,:), s_tmp(:,:)
@@ -123,6 +138,7 @@ subroutine davidson_diag_hjj_sjj(dets_in,u_in,H_jj,s2_out,energies,dim_in,sze,N_
   integer                        :: shift, shift2, itermax, istate
   double precision               :: r1, r2
   logical                        :: state_ok(N_st_diag*davidson_sze_max)
+  integer                        :: nproc_target
   include 'constants.include.F'
   
   !DIR$ ATTRIBUTES ALIGN : $IRP_ALIGN :: U, W, S, y, h, lambda
@@ -133,6 +149,7 @@ subroutine davidson_diag_hjj_sjj(dets_in,u_in,H_jj,s2_out,energies,dim_in,sze,N_
   endif
   
   itermax = max(3,min(davidson_sze_max, sze/N_st_diag))
+  itertot = 0
   
   PROVIDE nuclear_repulsion expected_s2 psi_bilinear_matrix_order psi_bilinear_matrix_order_reverse
   
@@ -146,8 +163,22 @@ subroutine davidson_diag_hjj_sjj(dets_in,u_in,H_jj,s2_out,energies,dim_in,sze,N_
   call write_int(6,N_st,'Number of states')
   call write_int(6,N_st_diag,'Number of states in diagonalization')
   call write_int(6,sze,'Number of determinants')
+  nproc_target = nproc
   r1 = 8.d0*(3.d0*dble(sze*N_st_diag*itermax+5.d0*(N_st_diag*itermax)**2 & 
-    + 4.d0*(N_st_diag*itermax)+nproc*(4.d0*N_det_alpha_unique+2.d0*N_st_diag*sze)))/(1024.d0**3)
+    + 3.d0*(N_st_diag*itermax)+nproc*(4.d0*N_det_alpha_unique+2.d0*N_st_diag*sze)))/(1024.d0**3)
+  if (qp_max_mem > 0) then
+    do while (r1 > qp_max_mem)
+      nproc_target = nproc_target - 1
+      r1 = 8.d0*(3.d0*dble(sze*N_st_diag*itermax+5.d0*(N_st_diag*itermax)**2 & 
+        + 3.d0*(N_st_diag*itermax)+nproc_target*(4.d0*N_det_alpha_unique+2.d0*N_st_diag*sze)))/(1024.d0**3)
+      if (nproc_target == 0) then
+        nproc_target = 1
+        exit
+      endif
+    enddo
+    call omp_set_num_threads(nproc_target)
+    call write_int(6,nproc_target,'Number of threads for diagonalization')
+  endif
   call write_double(6, r1, 'Memory(Gb)')
   write(6,'(A)') ''
   write_buffer = '====='
@@ -220,7 +251,11 @@ subroutine davidson_diag_hjj_sjj(dets_in,u_in,H_jj,s2_out,energies,dim_in,sze,N_
 
   
   do while (.not.converged)
-    
+    itertot = itertot+1
+    if (itertot == 8) then
+      exit
+    endif
+
     do k=1,N_st_diag
       do i=1,sze
         U(i,k) = u_in(i,k)
@@ -492,6 +527,7 @@ subroutine davidson_diag_hjj_sjj(dets_in,u_in,H_jj,s2_out,energies,dim_in,sze,N_
       y, s_, s_tmp,                                                  &
       lambda                                                         &
       )
+  call omp_set_num_threads(nproc)
 end
 
 

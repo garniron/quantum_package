@@ -5,15 +5,27 @@ program cassd_zmq
   integer                        :: degree
   integer                        :: n_det_before, to_select
   double precision               :: threshold_davidson_in
+  double precision               :: error(N_states)
   
   allocate (pt2(N_states))
 
   double precision               :: hf_energy_ref
   logical                        :: has
+  integer                        :: N_states_p
+  character*(512)                :: fmt
+  character*(8) :: pt2_string
+
   pt2 = -huge(1.d0)
+  error = 0.d0
   threshold_davidson_in = threshold_davidson
   threshold_davidson = threshold_davidson_in * 100.d0
   SOFT_TOUCH threshold_davidson
+
+  if (do_pt2) then
+    pt2_string = '        '
+  else
+    pt2_string = '(approx)'
+  endif
 
   call diagonalize_CI
   call save_wavefunction
@@ -45,7 +57,6 @@ program cassd_zmq
   double precision               :: E_CI_before(N_states)
   
   
-  print*,'Beginning the selection ...'
   if (.True.) then ! Avoid pre-calculation of CI_energy
     E_CI_before(1:N_states) = CI_energy(1:N_states)
   endif
@@ -60,6 +71,8 @@ program cassd_zmq
           (maxval(abs(pt2(1:N_states))) > pt2_max) .and.               &
           (correlation_energy_ratio <= correlation_energy_ratio_max)    &
           )
+       write(*,'(A)')  '--------------------------------------------------------------------------------'
+
 
       correlation_energy_ratio = (CI_energy(1) - hf_energy_ref)  /     &
                       (E_CI_before(1) + pt2(1) - hf_energy_ref)
@@ -98,6 +111,67 @@ program cassd_zmq
       to_select = min(to_select, N_det_max-n_det_before)
       call ZMQ_selection(to_select, pt2)
       
+      N_states_p = min(N_det,N_states)
+
+      print *, ''
+      print '(A,I12)',  'Summary at N_det = ', N_det
+      print '(A)',      '-----------------------------------'
+      print *, ''
+      call write_double(6,correlation_energy_ratio, 'Correlation ratio')
+      print *, ''
+
+      write(fmt,*) '(''# ============'',', N_states_p, '(1X,''=============================''))'
+      write(*,fmt)
+      write(fmt,*) '(12X,', N_states_p, '(6X,A7,1X,I6,10X))'
+      write(*,fmt) ('State',k, k=1,N_states_p)
+      write(fmt,*) '(''# ============'',', N_states_p, '(1X,''=============================''))'
+      write(*,fmt)
+      write(fmt,*) '(A12,', N_states_p, '(1X,F14.8,15X))'
+      write(*,fmt) '# E          ', E_CI_before(1:N_states_p)
+      if (N_states_p > 1) then
+        write(*,fmt) '# Excit. (au)', E_CI_before(1:N_states_p)-E_CI_before(1)
+        write(*,fmt) '# Excit. (eV)', (E_CI_before(1:N_states_p)-E_CI_before(1))*27.211396641308d0
+      endif
+      write(fmt,*) '(A12,', 2*N_states_p, '(1X,F14.8))'
+      write(*,fmt) '# PT2'//pt2_string, (pt2(k), error(k), k=1,N_states_p)
+      write(*,'(A)') '#'
+      write(*,fmt) '# E+PT2      ', (E_CI_before(k)+pt2(k),error(k), k=1,N_states_p)
+      if (N_states_p > 1) then
+        write(*,fmt) '# Excit. (au)', ( (E_CI_before(k)+pt2(k)-E_CI_before(1)-pt2(1)), &
+          dsqrt(error(k)*error(k)+error(1)*error(1)), k=1,N_states_p)
+        write(*,fmt) '# Excit. (eV)', ( (E_CI_before(k)+pt2(k)-E_CI_before(1)-pt2(1))*27.211396641308d0, &
+          dsqrt(error(k)*error(k)+error(1)*error(1))*27.211396641308d0, k=1,N_states_p)
+      endif
+      write(fmt,*) '(''# ============'',', N_states_p, '(1X,''=============================''))'
+      write(*,fmt)
+      print *,  ''
+
+      print *,  'N_det             = ', N_det
+      print *,  'N_states          = ', N_states
+      print*,   'correlation_ratio = ', correlation_energy_ratio
+
+      do k=1, N_states_p
+        print*,'State ',k
+        print *,  'PT2             = ', pt2(k)
+        print *,  'E               = ', E_CI_before(k)
+        print *,  'E+PT2'//pt2_string//'   = ', E_CI_before(k)+pt2(k), ' +/- ', error(k)
+      enddo
+
+      print *,  '-----'
+      if(N_states.gt.1)then
+        print *, 'Variational Energy difference (au | eV)'
+        do i=2, N_states_p
+          print*,'Delta E = ', (E_CI_before(i) - E_CI_before(1)), &
+            (E_CI_before(i) - E_CI_before(1)) * 27.211396641308d0
+        enddo
+        print *,  '-----'
+        print*, 'Variational + perturbative Energy difference (au | eV)'
+        do i=2, N_states_p
+          print*,'Delta E = ', (E_CI_before(i)+ pt2(i) - (E_CI_before(1) + pt2(1))), &
+            (E_CI_before(i)+ pt2(i) - (E_CI_before(1) + pt2(1))) * 27.211396641308d0
+        enddo
+      endif
+
       PROVIDE  psi_coef
       PROVIDE  psi_det
       PROVIDE  psi_det_sorted

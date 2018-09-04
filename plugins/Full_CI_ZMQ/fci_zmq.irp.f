@@ -22,8 +22,8 @@ program fci_zmq
   threshold_davidson = threshold_davidson_in * 100.d0
   SOFT_TOUCH threshold_davidson
 
-  call diagonalize_CI
-  call save_wavefunction
+!  call diagonalize_CI
+!  call save_wavefunction
   
   call ezfio_has_hartree_fock_energy(has)
   if (has) then
@@ -52,6 +52,11 @@ program fci_zmq
   double precision :: error(N_states)
 
   correlation_energy_ratio = 0.d0
+  if (do_pt2) then
+    pt2_string = '        '
+  else
+    pt2_string = '(approx)'
+  endif
 
   if (.True.) then ! Avoid pre-calculation of CI_energy
     do while (                                                         &
@@ -63,17 +68,14 @@ program fci_zmq
 
 
       if (do_pt2) then
-        pt2_string = '        '
         pt2 = 0.d0
         threshold_selectors = 1.d0
-        threshold_generators = 1d0 
+        threshold_generators = 1.d0 
         SOFT_TOUCH threshold_selectors threshold_generators
         call ZMQ_pt2(CI_energy, pt2,relative_error,absolute_error,error) ! Stochastic PT2
         threshold_selectors = threshold_selectors_save
         threshold_generators = threshold_generators_save
         SOFT_TOUCH threshold_selectors threshold_generators
-      else
-        pt2_string = '(approx)'
       endif
 
 

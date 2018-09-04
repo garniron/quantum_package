@@ -14,7 +14,7 @@ function _install()
   make -j 8                        || exit 1
   mv libf77zmq.a "${QP_ROOT}"/lib  || exit 1
   mv libf77zmq.so "${QP_ROOT}"/lib || exit 1
-  cp f77_zmq.h "${QP_ROOT}"/src/ZMQ/
+  cp f77_zmq_free.h "${QP_ROOT}"/src/ZMQ/f77_zmq.h 
   cd -
   return 0
 }

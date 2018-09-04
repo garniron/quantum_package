@@ -63,8 +63,8 @@ END_PROVIDER
     call davidson_diag_HS2(psi_det,CI_eigenvectors_dressed, CI_eigenvectors_s2_dressed,&
         size(CI_eigenvectors_dressed,1), CI_electronic_energy_dressed,&
         N_det,min(N_det,N_states),min(N_det,N_states_diag),N_int,1)
-    call u_0_S2_u_0(CI_eigenvectors_s2_dressed,CI_eigenvectors_dressed,N_det,psi_det,N_int,&
-        N_states_diag,size(CI_eigenvectors_dressed,1))
+!    call u_0_S2_u_0(CI_eigenvectors_s2_dressed,CI_eigenvectors_dressed,N_det,psi_det,N_int,&
+!        N_states_diag,size(CI_eigenvectors_dressed,1))
     
     
   else if (diag_algorithm == "Lapack") then

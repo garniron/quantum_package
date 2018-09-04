@@ -95,10 +95,9 @@ subroutine ZMQ_pt2(E, pt2,relative_error, absolute_error, error)
     
     state_average_weight_save(:) = state_average_weight(:)
     do pt2_stoch_istate=1,N_states
-      SOFT_TOUCH pt2_stoch_istate
       state_average_weight(:) = 0.d0
       state_average_weight(pt2_stoch_istate) = 1.d0
-      TOUCH state_average_weight 
+      TOUCH state_average_weight pt2_stoch_istate
 
       provide nproc pt2_F mo_bielec_integrals_in_map mo_mono_elec_integral pt2_w psi_selectors 
       
@@ -112,6 +111,7 @@ subroutine ZMQ_pt2(E, pt2,relative_error, absolute_error, error)
       integer, external              :: zmq_put_N_det_generators
       integer, external              :: zmq_put_N_det_selectors
       integer, external              :: zmq_put_dvector
+      integer, external              :: zmq_put_ivector
       if (zmq_put_psi(zmq_to_qp_run_socket,1) == -1) then
         stop 'Unable to put psi on ZMQ server'
       endif
@@ -124,7 +124,20 @@ subroutine ZMQ_pt2(E, pt2,relative_error, absolute_error, error)
       if (zmq_put_dvector(zmq_to_qp_run_socket,1,'energy',pt2_e0_denominator,size(pt2_e0_denominator)) == -1) then
         stop 'Unable to put energy on ZMQ server'
       endif
-      
+      if (zmq_put_dvector(zmq_to_qp_run_socket,1,'state_average_weight',state_average_weight,N_states) == -1) then
+        stop 'Unable to put state_average_weight on ZMQ server'
+      endif
+      if (zmq_put_ivector(zmq_to_qp_run_socket,1,'pt2_stoch_istate',pt2_stoch_istate,1) == -1) then
+        stop 'Unable to put pt2_stoch_istate on ZMQ server'
+      endif
+      if (zmq_put_dvector(zmq_to_qp_run_socket,1,'threshold_selectors',threshold_selectors,1) == -1) then
+        stop 'Unable to put threshold_selectors on ZMQ server'
+      endif
+      if (zmq_put_dvector(zmq_to_qp_run_socket,1,'threshold_generators',threshold_generators,1) == -1) then
+        stop 'Unable to put threshold_generators on ZMQ server'
+      endif
+
+
       integer, external :: add_task_to_taskserver
       
       
@@ -143,7 +156,17 @@ subroutine ZMQ_pt2(E, pt2,relative_error, absolute_error, error)
       endif
 
       
-      !$OMP PARALLEL DEFAULT(shared) NUM_THREADS(nproc+1)            &
+      integer :: nproc_target
+      nproc_target = nproc
+      double precision :: mem
+      mem = 8.d0 * N_det * (N_int * 2.d0 * 3.d0 +  3.d0 + 5.d0) / (1024.d0**3)
+      call write_double(6,mem,'Estimated memory/thread (Gb)')
+      if (qp_max_mem > 0) then
+        nproc_target = max(1,int(dble(qp_max_mem)/mem))
+        nproc_target = min(nproc_target,nproc)
+      endif
+
+      !$OMP PARALLEL DEFAULT(shared) NUM_THREADS(nproc_target+1)            &
           !$OMP  PRIVATE(i)
       i = omp_get_thread_num()
       if (i==0) then
@@ -255,7 +278,7 @@ subroutine pt2_collector(zmq_socket_pull, E, relative_error, absolute_error, pt2
         end do
         avg = S(t) / dble(c)
         eqt = (S2(t) / c) - (S(t)/c)**2
-        eqt = sqrt(eqt / dble(c-1))
+        eqt = sqrt(eqt / dble(c-1+1))
         pt2(pt2_stoch_istate) = E0-E+avg
         error(pt2_stoch_istate) = eqt
         time = omp_get_wtime()

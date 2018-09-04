@@ -10,7 +10,6 @@ subroutine ZMQ_selection(N_in, pt2)
   integer                        :: i, N
   integer, external              :: omp_get_thread_num
   double precision, intent(out)  :: pt2(N_states)
-  integer, parameter             :: maxtasks=10000
   
   
   PROVIDE fragment_count
@@ -21,7 +20,7 @@ subroutine ZMQ_selection(N_in, pt2)
     PROVIDE psi_bilinear_matrix_columns_loc psi_det_alpha_unique psi_det_beta_unique
     PROVIDE psi_bilinear_matrix_rows psi_det_sorted_order psi_bilinear_matrix_order
     PROVIDE psi_bilinear_matrix_transp_rows_loc psi_bilinear_matrix_transp_columns
-    PROVIDE psi_bilinear_matrix_transp_order
+    PROVIDE psi_bilinear_matrix_transp_order fragment_count
 
     call new_parallel_job(zmq_to_qp_run_socket,zmq_socket_pull,'selection')
 
@@ -42,30 +41,54 @@ subroutine ZMQ_selection(N_in, pt2)
     if (zmq_put_dvector(zmq_to_qp_run_socket,1,'energy',pt2_e0_denominator,size(pt2_e0_denominator)) == -1) then
       stop 'Unable to put energy on ZMQ server'
     endif
+    if (zmq_put_dvector(zmq_to_qp_run_socket,1,'threshold_selectors',threshold_selectors,1) == -1) then
+      stop 'Unable to put threshold_selectors on ZMQ server'
+    endif
+    if (zmq_put_dvector(zmq_to_qp_run_socket,1,'state_average_weight',state_average_weight,N_states) == -1) then
+      stop 'Unable to put state_average_weight on ZMQ server'
+    endif
+    if (zmq_put_dvector(zmq_to_qp_run_socket,1,'threshold_generators',threshold_generators,1) == -1) then
+      stop 'Unable to put threshold_generators on ZMQ server'
+    endif
     call create_selection_buffer(N, N*2, b)
   endif
 
   integer, external :: add_task_to_taskserver
-  character*(20*maxtasks) :: task
+  character(len=64000)           :: task
+  integer :: j,k,ipos
+  ipos=1
   task = ' ' 
 
-  integer :: k
-  k=0
   do i= 1, N_det_generators
-    k = k+1
-    write(task(20*(k-1)+1:20*k),'(I9,1X,I9,''|'')') i, N
-    if (k>=maxtasks) then
-       k=0
-       if (add_task_to_taskserver(zmq_to_qp_run_socket,task) == -1) then
-         stop 'Unable to add task to task server'
-       endif
-    endif
-  end do
-  if (k > 0) then
-    if (add_task_to_taskserver(zmq_to_qp_run_socket,task) == -1) then
+!    /!\ Fragments don't work
+!    if (i>-ishft(N_det_generators,-2)) then
+      write(task(ipos:ipos+30),'(I9,1X,I9,1X,I9,''|'')') 0, i, N
+      ipos += 30
+      if (ipos > 63970) then
+        if (add_task_to_taskserver(zmq_to_qp_run_socket,trim(task(1:ipos))) == -1) then
+          stop 'Unable to add task to task server'
+        endif
+        ipos=1
+      endif
+!    else
+!      do j=1,fragment_count
+!        write(task(ipos:ipos+30),'(I9,1X,I9,1X,I9,''|'')') j, i, N
+!        ipos += 30
+!        if (ipos > 63970) then
+!          if (add_task_to_taskserver(zmq_to_qp_run_socket,trim(task(1:ipos))) == -1) then
+!            stop 'Unable to add task to task server'
+!          endif
+!          ipos=1
+!        endif
+!      end do
+!    endif
+  enddo
+  if (ipos > 1) then
+    if (add_task_to_taskserver(zmq_to_qp_run_socket,trim(task(1:ipos))) == -1) then
       stop 'Unable to add task to task server'
     endif
   endif
+  
 
   ASSERT (associated(b%det))
   ASSERT (associated(b%val))
@@ -75,7 +98,17 @@ subroutine ZMQ_selection(N_in, pt2)
     print *,  irp_here, ': Failed in zmq_set_running'
   endif
 
-  !$OMP PARALLEL DEFAULT(shared)  SHARED(b, pt2)  PRIVATE(i) NUM_THREADS(nproc+1)
+  integer :: nproc_target
+  nproc_target = nproc
+  double precision :: mem
+  mem = 8.d0 * N_det * (N_int * 2.d0 * 3.d0 +  3.d0 + 5.d0) / (1024.d0**3)
+  call write_double(6,mem,'Estimated memory/thread (Gb)')
+  if (qp_max_mem > 0) then
+    nproc_target = max(1,int(dble(qp_max_mem)/mem))
+    nproc_target = min(nproc_target,nproc)
+  endif
+
+  !$OMP PARALLEL DEFAULT(shared)  SHARED(b, pt2)  PRIVATE(i) NUM_THREADS(nproc_target+1)
   i = omp_get_thread_num()
   if (i==0) then
     call selection_collector(zmq_socket_pull, b, N, pt2)
@@ -130,6 +163,9 @@ subroutine selection_collector(zmq_socket_pull, b, N, pt2)
   integer(bit_kind), pointer :: det(:,:,:)
   integer, allocatable :: task_id(:)
   type(selection_buffer) :: b2
+  
+  
+  
 
   zmq_to_qp_run_socket = new_zmq_to_qp_run_socket()
   call create_selection_buffer(N, N*2, b2)

@@ -28,7 +28,8 @@ except:
     sys.exit(1)
 else:
     sys.path = [ QP_ROOT + "/install/EZFIO/Python", 
-                 QP_ROOT + "/resultsFile", 
+                 QP_ROOT + "/install/resultsFile", 
+                 QP_ROOT + "/install", 
                  QP_ROOT + "/scripts"] + sys.path
 
 # ~#~#~#~#~#~ #
@@ -92,6 +93,7 @@ def write_ezfio(res, filename):
             coord_y.append(a.coord[1] / a0)
             coord_z.append(a.coord[2] / a0)
 
+
     # ~#~#~#~#~ #
     # W r i t e #
     # ~#~#~#~#~ #
@@ -125,9 +127,7 @@ def write_ezfio(res, filename):
     coefficient = []
     exponent = []
 
-    res.clean_contractions()
     res.convert_to_cartesian()
-
     # ~#~#~#~#~#~#~ #
     # P a r s i n g #
     # ~#~#~#~#~#~#~ #
@@ -262,159 +262,74 @@ def write_ezfio(res, filename):
     ezfio.set_mo_basis_mo_occ(OccNum)
     ezfio.set_mo_basis_mo_coef(MoMatrix)
 
-    # ______                   _
-    # | ___ \                 | |
-    # | |_/ /__  ___ _   _  __| | ___
-    # |  __/ __|/ _ \ | | |/ _` |/ _ \
-    # | |  \__ \  __/ |_| | (_| | (_) |
-    # \_|  |___/\___|\__,_|\__,_|\___/
-    #
-
-    # INPUT
-    # {% for lanel,zcore, l_block in l_atom  $}
-    #       #local l_block l=0}
-    #       {label} GEN {zcore} {len(l_block)-1 #lmax_block}
-    #       {% for l_param in l_block%}
-    #                {len(l_param) # list of parameter aka n_max_bock_max(n)}
-    #                {% for coef,n,zeta for l_param}
-    #                    {coef,n, zeta}
-
-
-    # OUTPUT
-
-    # Local are 1 array padded by max(n_max_block) when l == 0  (output:k_loc_max)
-    # v_k[n-2][atom] = value
-
-    #Non Local are 2 array padded with max of lmax_block when l!=0 (output:lmax+1)  and max(n_max_block)whem l !=0 (kmax)
-    # v_kl[l][n-2][atom] = value
-
-    def pad(array, size, value=0):
-        new_array = array
-        for add in xrange(len(array), size):
-            new_array.append(value)
-
-        return new_array
-
-    def parse_str(pseudo_str):
-        '''Return 4d array  atom,l,n, attribute (attribute is coef, n, zeta)'''
-        matrix = []
-        array_l_max_block = []
-        array_z_remove = []
-
-        for block in [b for b in pseudo_str.split('\n\n') if b]:
-            #First element is header, the rest are l_param 
-            array_party = [i for i in re.split(r"\n\d+\n", block) if i]
-
-            z_remove, l_max_block = map(int, array_party[0].split()[-2:])
-            array_l_max_block.append(l_max_block)
-            array_z_remove.append(z_remove)
-
-            x = []
-            for l in array_party[1:]:
-              y = []
-              for coef_n_zeta in l.split('\n'):
-                z = coef_n_zeta.split()
-                if z : y.append(z)
-              x.append(y)
-            matrix.append(x)
-        return (matrix, array_l_max_block, array_z_remove)
-
-    def get_local_stuff(matrix):
-
-        matrix_local_unpad = [atom[0] for atom in matrix]
-        k_loc_max = max(len(i) for i in matrix_local_unpad)
-
-        matrix_local = [ pad(ll, k_loc_max, [0., 2, 0.]) for ll in matrix_local_unpad]
-        m_coef = [[float(i[0]) for i in atom] for atom in matrix_local]
-        m_n = [[int(i[1]) - 2 for i in atom] for atom in matrix_local]
-        m_zeta = [[float(i[2]) for i in atom] for atom in matrix_local]
-        return (k_loc_max, m_coef, m_n, m_zeta)
-
-    def get_non_local_stuff(matrix):
-
-        matrix_unlocal_unpad = [atom[1:] for atom in matrix]
-        l_max_block = max(len(i) for i in matrix_unlocal_unpad)
-        k_max = max([len(item) for row in matrix_unlocal_unpad for item in row])
-
-        matrix_unlocal_semipaded = [[pad(item, k_max, [0., 2, 0.]) for item in row] for row in matrix_unlocal_unpad]
-
-        empty_row = [[0., 2, 0.] for k in range(l_max_block)]
-        matrix_unlocal = [  pad(ll, l_max_block, empty_row) for ll in matrix_unlocal_semipaded ]
-
-        m_coef_noloc = [[[float(k[0]) for k in j] for j in i] for i in matrix_unlocal]
-        m_n_noloc =    [[[int(k[1]) - 2 for k in j] for j in i]  for i in matrix_unlocal]
-        m_zeta_noloc = [[[float(k[2]) for k in j] for j in i] for i in matrix_unlocal]
-
-        return (l_max_block, k_max, m_coef_noloc, m_n_noloc, m_zeta_noloc)
-
     try:
-        pseudo_str = []
-        label = ezfio.get_nuclei_nucl_label()
+        lmax = 0
+        nucl_charge_remove = []
+        klocmax = 0
+        kmax = 0
+        nucl_num = len(res.geometry)
         for ecp in res.pseudo:
-          pseudo_str += [ "%(label)s GEN %(zcore)d %(lmax)d" % { "label": label[ ecp["atom"]-1 ],
-                "zcore": ecp["zcore"], "lmax": ecp["lmax"] } ]
-          lmax = ecp["lmax"]
-          for l in [lmax] + list(range(0,lmax)):
-            pseudo_str += [ "%d"%len(ecp[str(l)]) ]
-            for t in ecp[str(l)]:
-              pseudo_str += [ "%f  %d  %f"%t ]
-          pseudo_str += [""]
-        pseudo_str = "\n".join(pseudo_str)
-             
-        matrix, array_l_max_block, array_z_remove = parse_str(pseudo_str)
-        array_z_remove = map(float,array_z_remove)
+          lmax_local = ecp['lmax']
+          lmax = max(lmax_local,lmax)
+          nucl_charge_remove.append(ecp['zcore'])
+          klocmax = max(klocmax, len(ecp[str(lmax_local)]))
+          for l in range(lmax_local):
+            kmax = max(kmax,len(ecp[str(l)]))
+        lmax = lmax-1
+        ezfio.set_pseudo_pseudo_lmax(lmax)
+        ezfio.set_pseudo_nucl_charge_remove(nucl_charge_remove)
+        ezfio.set_pseudo_pseudo_klocmax(klocmax)
+        ezfio.set_pseudo_pseudo_kmax(kmax)
+        pseudo_n_k   = [   [ 0  for _ in range(nucl_num) ] for _ in range(klocmax) ]
+        pseudo_v_k   = [   [ 0. for _ in range(nucl_num) ] for _ in range(klocmax) ]
+        pseudo_dz_k  = [   [ 0. for _ in range(nucl_num) ] for _ in range(klocmax) ]
+        pseudo_n_kl  = [ [ [ 0  for _ in range(nucl_num) ] for _ in range(kmax) ] for _ in range(lmax+1) ]
+        pseudo_v_kl  = [ [ [ 0. for _ in range(nucl_num) ] for _ in range(kmax) ] for _ in range(lmax+1) ]
+        pseudo_dz_kl = [ [ [ 0. for _ in range(nucl_num) ] for _ in range(kmax) ] for _ in range(lmax+1) ]
+        for ecp in res.pseudo:
+          lmax_local = ecp['lmax']
+          klocmax = len(ecp[str(lmax_local)])
+          atom = ecp['atom']-1
+          for kloc in range(klocmax):
+            try:
+                v, n, dz = ecp[str(lmax_local)][kloc]
+                pseudo_n_k[kloc][atom] = n-2
+                pseudo_v_k[kloc][atom] = v
+                pseudo_dz_k[kloc][atom] = dz
+            except:
+                pass
+          for l in range(lmax_local):
+            for k in range(kmax):
+              try:
+                v, n, dz = ecp[str(l)][k]
+                pseudo_n_kl[l][k][atom] = n-2
+                pseudo_v_kl[l][k][atom] = v
+                pseudo_dz_kl[l][k][atom] = dz
+              except:
+                pass
+        ezfio.set_pseudo_pseudo_n_k(pseudo_n_k)
+        ezfio.set_pseudo_pseudo_v_k(pseudo_v_k)
+        ezfio.set_pseudo_pseudo_dz_k(pseudo_dz_k)
+        ezfio.set_pseudo_pseudo_n_kl(pseudo_n_kl)
+        ezfio.set_pseudo_pseudo_v_kl(pseudo_v_kl)
+        ezfio.set_pseudo_pseudo_dz_kl(pseudo_dz_kl)
+
+        n_alpha = res.num_alpha
+        n_beta  = res.num_beta
+        for i in range(nucl_num):
+          charge[i] -= nucl_charge_remove[i]
+          n_alpha -= nucl_charge_remove[i]/2
+          n_beta -= nucl_charge_remove[i]/2
+        ezfio.set_nuclei_nucl_charge(charge)
+        ezfio.set_electrons_elec_alpha_num(n_alpha)
+        ezfio.set_electrons_elec_beta_num(n_beta)
+    
     except:
         ezfio.set_pseudo_do_pseudo(False)
     else:
         ezfio.set_pseudo_do_pseudo(True)
+
         
-        # ~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~ #
-        # Z _ e f f , a l p h a / b e t a _ e l e c #
-        # ~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~ #
-
-        ezfio.set_pseudo_nucl_charge_remove(array_z_remove)
-        charge = ezfio.get_nuclei_nucl_charge()
-        charge = [ i - j for i, j in zip(charge, array_z_remove) ] 
-        ezfio.set_nuclei_nucl_charge (charge)
-
-        import math
-        num_elec_diff = sum(array_z_remove)/2
-        nalpha = ezfio.get_electrons_elec_alpha_num() - num_elec_diff
-        nbeta  = ezfio.get_electrons_elec_beta_num() - num_elec_diff
-
-        ezfio.set_electrons_elec_alpha_num(nalpha)
-        ezfio.set_electrons_elec_beta_num( nbeta )
-
-        # Change all the array 'cause EZFIO
-        #   v_kl (v, l) => v_kl(l,v)
-        #    v_kl => zip(*_v_kl)
-        # [[7.0, 79.74474797, -49.45159098], [1.0, 5.41040609, -4.60151975]]
-        # [(7.0, 1.0), (79.74474797, 5.41040609), (-49.45159098, -4.60151975)]
-
-        # ~#~#~#~#~ #
-        # L o c a l #
-        # ~#~#~#~#~ #
-
-        klocmax, m_coef, m_n, m_zeta = get_local_stuff(matrix)
-        ezfio.pseudo_pseudo_klocmax = klocmax
-
-        ezfio.pseudo_pseudo_v_k  = zip(*m_coef)
-        ezfio.pseudo_pseudo_n_k  = zip(*m_n)
-        ezfio.pseudo_pseudo_dz_k = zip(*m_zeta)
-
-        # ~#~#~#~#~#~#~#~#~ #
-        # N o n _ L o c a l #
-        # ~#~#~#~#~#~#~#~#~ #
-
-        l_max_block, k_max, m_coef_noloc, m_n_noloc, m_zeta_noloc = get_non_local_stuff(
-            matrix)
-
-        ezfio.pseudo_pseudo_lmax = l_max_block - 1
-        ezfio.pseudo_pseudo_kmax = k_max
-
-        ezfio.pseudo_pseudo_v_kl = zip(*m_coef_noloc)
-        ezfio.pseudo_pseudo_n_kl = zip(*m_n_noloc)
-        ezfio.pseudo_pseudo_dz_kl = zip(*m_zeta_noloc)
 
 
 def get_full_path(file_path):

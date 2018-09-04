@@ -54,7 +54,7 @@ END_PROVIDER
  ! function.
  END_DOC
  call sort_dets_by_det_search_key(N_det_cas, psi_cas, psi_cas_coef, &
-     psi_cas_sorted_bit, psi_cas_coef_sorted_bit)
+     psi_cas_sorted_bit, psi_cas_coef_sorted_bit, N_states)
 
 END_PROVIDER
 
@@ -107,7 +107,7 @@ END_PROVIDER
  ! function.
  END_DOC
  call sort_dets_by_det_search_key(N_det_cas, psi_non_cas, psi_non_cas_coef, &
-     psi_non_cas_sorted_bit, psi_non_cas_coef_sorted_bit)
+     psi_non_cas_sorted_bit, psi_non_cas_coef_sorted_bit, N_states)
 
 END_PROVIDER
 

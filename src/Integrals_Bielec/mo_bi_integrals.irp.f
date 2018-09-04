@@ -240,7 +240,7 @@ subroutine add_integrals_to_map(mask_ijkl)
   call bitstring_to_list( mask_ijkl(1,3), list_ijkl(1,3), n_k, N_int )
   call bitstring_to_list( mask_ijkl(1,4), list_ijkl(1,4), n_l, N_int )
   character*(2048)               :: output(1)
-  print*, 'i'
+  print *, 'i'
   call bitstring_to_str( output(1), mask_ijkl(1,1), N_int )
   print *,  trim(output(1))
   j = 0

@@ -156,3 +156,89 @@ end subroutine
 
 
 
+subroutine unique_selection_buffer(b)
+  use selection_types
+  implicit none
+  BEGIN_DOC
+! Removes duplicate determinants in the selection buffer
+  END_DOC
+  type(selection_buffer), intent(inout) :: b
+  integer, allocatable :: iorder(:)
+  integer(bit_kind), pointer :: detmp(:,:,:)
+  double precision, pointer      :: val(:)
+  integer                        :: i,j,k
+  integer(bit_kind), allocatable :: bit_tmp(:)
+  logical,allocatable            :: duplicate(:)
+
+  logical :: found_duplicates
+  integer*8, external :: det_search_key
+
+  if (b%N == 0 .or. b%cur == 0) return
+  allocate (duplicate(b%cur), val(size(b%val)), detmp(N_int, 2, size(b%val)), bit_tmp(b%cur))
+  call sort_dets_by_det_search_key(b%cur, b%det, b%val, detmp, val, 1) 
+
+  deallocate(b%det, b%val)
+  do i=b%cur+1,b%N
+    val(i) = 0.d0
+    detmp(1:N_int,1:2,i) = 0_bit_kind
+  enddo
+  b%det => detmp
+  b%val => val
+
+  do i=1,b%cur
+    bit_tmp(i) = det_search_key(b%det(1,1,i),N_int)
+    duplicate(i) = .False.
+  enddo
+
+  do i=1,b%cur-1
+    if (duplicate(i)) then
+      cycle
+    endif
+    j = i+1
+    do while (bit_tmp(j)==bit_tmp(i))
+      if (duplicate(j)) then
+        j += 1
+        if (j > b%cur) then
+          exit
+        else
+          cycle
+        endif
+      endif
+      duplicate(j) = .True.
+      do k=1,N_int
+        if ( (b%det(k,1,i) /= b%det(k,1,j) ) &
+        .or. (b%det(k,2,i) /= b%det(k,2,j) ) ) then
+          duplicate(j) = .False.
+          exit
+        endif
+      enddo
+      j += 1
+      if (j > b%cur) then
+        exit
+      endif
+    enddo
+  enddo
+
+  found_duplicates = .False.
+  do i=1,b%cur
+    if (duplicate(i)) then
+      found_duplicates = .True.
+      exit
+    endif
+  enddo
+
+  if (found_duplicates) then
+    k=0
+    do i=1,N_det
+      if (.not.duplicate(i)) then
+        k += 1
+        b%det(:,:,k) = b%det(:,:,i)
+        b%val(k)  = b%val(i)
+      endif
+    enddo
+    b%cur = k
+  endif
+  deallocate (duplicate,bit_tmp)
+end
+
+

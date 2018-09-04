@@ -321,21 +321,24 @@ end subroutine
    END_DOC
    
    call sort_dets_by_det_search_key(N_det, psi_det, psi_coef,        &
-       psi_det_sorted_bit, psi_coef_sorted_bit)
+       psi_det_sorted_bit, psi_coef_sorted_bit, N_states)
 END_PROVIDER
  
-subroutine sort_dets_by_det_search_key(Ndet, det_in, coef_in, det_out, coef_out)
+subroutine sort_dets_by_det_search_key(Ndet, det_in, coef_in, det_out, coef_out, N_st)
    use bitmasks
    implicit none
-   integer, intent(in)            :: Ndet
+   integer, intent(in)            :: Ndet, N_st
    integer(bit_kind), intent(in)  :: det_in  (N_int,2,psi_det_size)
-   double precision , intent(in)  :: coef_in(psi_det_size,N_states)
+   double precision , intent(in)  :: coef_in(psi_det_size,N_st)
    integer(bit_kind), intent(out) :: det_out (N_int,2,psi_det_size)
-   double precision , intent(out) :: coef_out(psi_det_size,N_states)
+   double precision , intent(out) :: coef_out(psi_det_size,N_st)
    BEGIN_DOC
    ! Determinants are sorted are sorted according to their det_search_key.
    ! Useful to accelerate the search of a random determinant in the wave
    ! function.
+   !
+   ! /!\ The first dimension of coef_out and coef_in need to be psi_det_size
+   !
    END_DOC
    integer                        :: i,j,k
    integer, allocatable           :: iorder(:)
@@ -356,7 +359,7 @@ subroutine sort_dets_by_det_search_key(Ndet, det_in, coef_in, det_out, coef_out)
        det_out(j,1,i) = det_in(j,1,iorder(i))
        det_out(j,2,i) = det_in(j,2,iorder(i))
      enddo
-     do k=1,N_states
+     do k=1,N_st
        coef_out(i,k) = coef_in(iorder(i),k)
      enddo
    enddo
@@ -450,6 +453,26 @@ end
 
 
 
+
+subroutine save_wavefunction_truncated(thr)
+  implicit none
+  double precision, intent(in) :: thr
+  use bitmasks
+  BEGIN_DOC
+  !  Save the wave function into the EZFIO file
+  END_DOC
+  integer :: N_det_save,i
+  N_det_save = N_det
+  do i=1,N_det
+    if (psi_average_norm_contrib_sorted(i) < thr) then
+      N_det_save = i
+      exit
+    endif
+  enddo
+  if (mpi_master) then
+    call save_wavefunction_general(N_det_save,min(N_states,N_det_save),psi_det_sorted,size(psi_coef_sorted,1),psi_coef_sorted)
+  endif
+end
 
 subroutine save_wavefunction
   implicit none
@@ -718,6 +741,7 @@ subroutine apply_excitation(det, exc, res, ok, Nint)
       case default
       print *, degree
       print *, "apply ex"
+!      print *,  1.d0/0.d0 ! For traceback
       STOP
   end select
   ! END INLINE

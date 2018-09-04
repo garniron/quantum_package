@@ -28,36 +28,41 @@ subroutine run_dressing(N_st,energy)
     E_new = 0.d0
     delta_E = 1.d0
     iteration = 0
-    do while (delta_E > thresh_dress)
-      N_det_delta_ij = N_det
-      touch N_det_delta_ij 
-      iteration += 1
+    do iteration=1,n_it_dress_max
       print *,  '===============================================' 
       print *,  'Iteration', iteration, '/', n_it_dress_max
       print *,  '===============================================' 
       print *,  ''
-      E_old = dress_e0_denominator(1) !sum(ci_energy_dressed(1:N_states))
-      !print *, "DELTA IJ", delta_ij(1,1,1)
-      !if(.true.) provide delta_ij_tmp
-      if(.true.) call delta_ij_done()
+      E_old = sum(psi_energy(:))
+      print *,  'Variational energy <Psi|H|Psi>'
       do i=1,N_st
-        if(.true.) call write_double(6,ci_energy_dressed(i),"Energy")
+        print *,  i, psi_energy(i)+nuclear_repulsion
+      enddo
+      print *,  'Dressed energy <Psi|H+Delta|Psi>'
+      do i=1,N_st
+        print *,  i, ci_energy_dressed(i)
       enddo
       call diagonalize_ci_dressed
-      E_new = dress_e0_denominator(1) !sum(ci_energy_dressed(1:N_states))
+      E_new = sum(psi_energy(:))
 
       delta_E = (E_new - E_old)/dble(N_states)
       print *,  ''
       call write_double(6,thresh_dress,"thresh_dress")
-      call write_double(6,delta_E,"delta_E")
+      call write_double(6,delta_E,"delta_E (undressed)")
       delta_E = dabs(delta_E)
       call save_wavefunction
-!     call ezfio_set_dress_zmq_energy(ci_energy_dressed(1))
-      if (iteration >= n_it_dress_max) then
+      if (delta_E < thresh_dress) then
         exit
       endif
     enddo
-    if(.true.) call write_double(6,ci_energy_dressed(1),"Final energy")
+    print *,  'Variational energy <Psi|H|Psi>'
+    do i=1,N_st
+      print *,  i, psi_energy(i)+nuclear_repulsion
+    enddo
+    print *,  'Dressed energy <Psi|H+Delta|Psi>'
+    do i=1,N_st
+      print *,  i, ci_energy_dressed(i)+nuclear_repulsion
+    enddo
   endif
   
   if(.true.) energy(1:N_st) = 0d0 ! ci_energy_dressed(1:N_st)

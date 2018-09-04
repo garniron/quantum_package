@@ -1,5 +1,122 @@
-
 subroutine run_selection_slave(thread,iproc,energy)
+  implicit none
+  integer,  intent(in)            :: thread, iproc
+  double precision, intent(in)    :: energy(N_states_diag)
+  call run_selection_slave_new(thread,iproc,energy)
+end
+
+subroutine run_selection_slave_new(thread,iproc,energy)
+  use f77_zmq
+  use selection_types
+  implicit none
+
+  integer,  intent(in)            :: thread, iproc
+  double precision, intent(in)    :: energy(N_states_diag)
+  integer                        :: rc, i, N
+  logical                        :: buffer_ready
+
+  integer                        :: worker_id, ltask
+  character*(512), allocatable   :: task(:)
+  integer, allocatable           :: task_id(:)
+
+  integer(ZMQ_PTR),external      :: new_zmq_to_qp_run_socket
+  integer(ZMQ_PTR)               :: zmq_to_qp_run_socket
+
+  integer(ZMQ_PTR), external     :: new_zmq_push_socket
+  integer(ZMQ_PTR)               :: zmq_socket_push
+
+  type(selection_buffer) :: buf, buf2
+  logical :: done
+
+  double precision,allocatable :: pt2(:,:)
+  integer :: n_tasks, k, n_tasks_max
+  integer, allocatable :: i_generator(:), subset(:)
+
+  PROVIDE psi_bilinear_matrix_columns_loc psi_det_alpha_unique psi_det_beta_unique
+  PROVIDE psi_bilinear_matrix_rows psi_det_sorted_order psi_bilinear_matrix_order
+  PROVIDE psi_bilinear_matrix_transp_rows_loc psi_bilinear_matrix_transp_columns
+  PROVIDE psi_bilinear_matrix_transp_order
+
+  buffer_ready = .False.
+  n_tasks_max = N_det_generators/100+1
+  allocate(task_id(n_tasks_max), task(n_tasks_max))
+  allocate(pt2(N_states,n_tasks_max), i_generator(n_tasks_max), subset(n_tasks_max))
+
+  zmq_to_qp_run_socket = new_zmq_to_qp_run_socket()
+
+  integer, external :: connect_to_taskserver
+  if (connect_to_taskserver(zmq_to_qp_run_socket,worker_id,thread) == -1) then
+    call end_zmq_to_qp_run_socket(zmq_to_qp_run_socket)
+    return
+  endif
+
+  zmq_socket_push      = new_zmq_push_socket(thread)
+
+  buf%N = 0
+  n_tasks = 1
+  call create_selection_buffer(0, 0, buf)
+  done = .False.
+  do while (.not.done)
+
+    n_tasks = max(1,n_tasks)
+    n_tasks = min(n_tasks,n_tasks_max)
+
+    integer, external :: get_tasks_from_taskserver
+    if (get_tasks_from_taskserver(zmq_to_qp_run_socket,worker_id, task_id, task, n_tasks) == -1) then
+      exit
+    endif
+    done = task_id(n_tasks) == 0
+    if (done) n_tasks = n_tasks-1
+    if (n_tasks == 0) exit
+
+    do k=1,n_tasks
+      read (task(k),*) subset(k), i_generator(k), N
+    enddo
+
+    if(buf%N == 0) then
+        ! Only first time 
+        call create_selection_buffer(N, N*2, buf)
+        call create_selection_buffer(N, N*2, buf2)
+        buffer_ready = .True.
+    endif
+
+    double precision :: time0, time1
+    call wall_time(time0)
+    do k=1,n_tasks
+        pt2(:,k) = 0.d0
+        buf%cur = 0
+        call select_connected(i_generator(k),energy,pt2(1,k),buf,subset(k))
+    enddo
+    call wall_time(time1)
+
+    integer, external :: tasks_done_to_taskserver
+    if (tasks_done_to_taskserver(zmq_to_qp_run_socket,worker_id,task_id,n_tasks) == -1) then
+      done = .true.
+    endif
+    call sort_selection_buffer(buf)
+    call merge_selection_buffers(buf,buf2)
+    call push_selection_results(zmq_socket_push, pt2, buf, task_id, n_tasks)
+    buf%mini = buf2%mini
+    pt2(:,:) = 0d0
+    buf%cur = 0
+
+!    ! Try to adjust n_tasks around 5 second per job
+!    n_tasks = min(n_tasks,int( 5.d0 * dble(n_tasks) / (time1 - time0 + 1.d-9)))+1
+     n_tasks = n_tasks+1
+  end do
+
+  integer, external :: disconnect_from_taskserver
+  if (disconnect_from_taskserver(zmq_to_qp_run_socket,worker_id) == -1) then
+    continue
+  endif
+
+  call end_zmq_push_socket(zmq_socket_push,thread)
+  call end_zmq_to_qp_run_socket(zmq_to_qp_run_socket)
+  call delete_selection_buffer(buf)
+
+end
+
+subroutine run_selection_slave_old(thread,iproc,energy)
   use f77_zmq
   use selection_types
   implicit none
@@ -50,8 +167,8 @@ subroutine run_selection_slave(thread,iproc,energy)
     if (done) then
       ctask = ctask - 1
     else
-      integer :: i_generator, N
-      read(task,*) i_generator, N
+      integer :: i_generator, N, subset
+      read(task,*) subset, i_generator, N
       if(buf%N == 0) then
         ! Only first time 
         call create_selection_buffer(N, N*2, buf)
@@ -60,7 +177,7 @@ subroutine run_selection_slave(thread,iproc,energy)
       else
         ASSERT (N == buf%N)
       end if
-      call select_connected(i_generator,energy,pt2,buf,1,1)
+      call select_connected(i_generator,energy,pt2,buf,subset,fragment_count)
     endif
 
     integer, external :: task_done_to_taskserver

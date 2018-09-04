@@ -7,7 +7,7 @@ program mrsc2sub
   mrmode = 3
 
   read_wf = .True.
-  SOFT_TOUCH read_wf
+  SOFT_TOUCH read_wf 
   call set_generators_bitmasks_as_holes_and_particles
   if (.True.) then
     integer :: i,j

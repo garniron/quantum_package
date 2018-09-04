@@ -43,6 +43,7 @@ subroutine ZMQ_mrcc(E, mrcc, delta, delta_s2, relative_error)
 
   
   
+  call write_double(6,relative_error,"Target relative error")
   print *, '========== ================= ================= ================='
   print *, ' Samples        Energy         Stat. Error         Seconds      '
   print *, '========== ================= ================= ================='
@@ -177,7 +178,6 @@ subroutine mrcc_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, m
   usf = 0d0
   num = 0d0
 
-  print *, "TARGET ERROR :", relative_error
   delta = 0d0
   delta_s2 = 0d0
   allocate(delta_det(N_states, N_det_non_ref, 0:comb_teeth+1, 2))
@@ -310,7 +310,6 @@ subroutine mrcc_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, m
         end if
       end do
       if(cur_cp == 0) then
-        print *, "no checkpoint reached so far..."
         cycle pullLoop
       end if
       !!!!!!!!!!!!
@@ -337,7 +336,7 @@ subroutine mrcc_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, m
         print '(I5,F15.7,E12.4,F10.2)', cur_cp, E(mrcc_stoch_istate)+E0+avg, eqt, time-timeInit
       end if
       
-      if ((dabs(eqt) < relative_error .and. cps_N(cur_cp) >= 30)  .or. total_computed == N_det_generators) then
+      if (( (dabs(eqt/(E(mrcc_stoch_istate)+E0+avg)) < relative_error) .and. (cps_N(cur_cp) >= 10) )  .or. total_computed == N_det_generators) then
         if (zmq_abort(zmq_to_qp_run_socket) == -1) then
           call sleep(1)
           if (zmq_abort(zmq_to_qp_run_socket) == -1) then
@@ -401,12 +400,13 @@ end function
 &BEGIN_PROVIDER [ integer, comb_teeth ]
 &BEGIN_PROVIDER [ integer, N_cps_max ]
   implicit none
+  integer :: comb_per_cp
   comb_teeth = 16
   N_cps_max = 64
-  !comb_per_cp = 64
+!  comb_per_cp = 64
   gen_per_cp = (N_det_generators / N_cps_max) + 1
-  N_cps_max += 1
-  !N_cps_max = N_det_generators / comb_per_cp + 1
+!  N_cps_max += 1
+  N_cps_max = N_det_generators / gen_per_cp + 1
 END_PROVIDER
 
 
@@ -526,6 +526,11 @@ subroutine get_comb_val(stato, detail, cur_cp, val)
   val = 0d0
   first = cp_first_tooth(cur_cp) 
 
+  !TODO : check 
+  if (first == 0) then
+    return
+  endif
+
   do j = comb_teeth, first, -1
     !DIR$ FORCEINLINE
     k = mrcc_find(curs, mrcc_cweight,size(mrcc_cweight), first_det_of_teeth(j), first_det_of_teeth(j+1))
@@ -562,7 +567,7 @@ subroutine add_comb(com, computed, cp, N, tbc)
   implicit none
   double precision, intent(in) :: com
   integer, intent(inout) :: N
-  double precision, intent(inout) :: cp(N_det_non_ref)
+  double precision, intent(inout) :: cp(N_det_generators)
   logical, intent(inout) :: computed(N_det_generators)
   integer, intent(inout) :: tbc(N_det_generators)
   integer :: i, k, l, dets(comb_teeth)
@@ -591,7 +596,7 @@ end subroutine
 &BEGIN_PROVIDER [ double precision, mrcc_cweight_cache, (N_det_generators) ]
 &BEGIN_PROVIDER [ double precision, fractage, (comb_teeth) ]
 &BEGIN_PROVIDER [ double precision, comb_step ]
-&BEGIN_PROVIDER [ integer, first_det_of_teeth, (comb_teeth+1) ]
+&BEGIN_PROVIDER [ integer, first_det_of_teeth, (0:comb_teeth+1) ]
 &BEGIN_PROVIDER [ integer, first_det_of_comb ]
 &BEGIN_PROVIDER [ integer, tooth_of_det, (N_det_generators) ]
   implicit none
@@ -650,6 +655,7 @@ end subroutine
   end do
   first_det_of_teeth(comb_teeth+1) = N_det_generators + 1
   first_det_of_teeth(1) = first_det_of_comb
+  first_det_of_teeth(0) = 1
   
 
   if(first_det_of_teeth(1) /= first_det_of_comb) then

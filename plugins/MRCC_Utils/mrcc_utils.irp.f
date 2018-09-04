@@ -1,6 +1,6 @@
 use bitmasks
 
- BEGIN_PROVIDER [ integer, mrmode ]
+BEGIN_PROVIDER [ integer, mrmode ]
   mrmode = 0
 END_PROVIDER
  

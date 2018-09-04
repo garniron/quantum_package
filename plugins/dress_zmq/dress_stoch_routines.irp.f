@@ -37,11 +37,11 @@ logical function testTeethBuilding(minF, N)
   allocate(tilde_w(N_det_generators), tilde_cW(0:N_det_generators))
   
   tilde_cW(0) = 0d0
-
   do i=1,N_det_generators
     tilde_w(i)  = psi_coef_generators(i,dress_stoch_istate)**2
     tilde_cW(i) = tilde_cW(i-1) + tilde_w(i)
   enddo
+  tilde_cW(N_det_generators) = 1d0
  
   n0 = 0
   do
@@ -130,7 +130,7 @@ END_PROVIDER
     dress_M_m(i) = U * (((i*i)+i)/2)
   end do
 
-  dress_M_m(1) = 1
+  dress_M_m(1) = min(dress_M_m(1), 2)
   dress_M_m(dress_N_cp_max) = N_det_generators+1
 
   do i=1,N_j
@@ -556,6 +556,7 @@ end function
     tilde_w(i)  = psi_coef_generators(i,dress_stoch_istate)**2
     tilde_cW(i) = tilde_cW(i-1) + tilde_w(i)
   enddo
+  tilde_cW(N_det_generators) = 1d0
   
   pt2_n_0(1) = 0
   do

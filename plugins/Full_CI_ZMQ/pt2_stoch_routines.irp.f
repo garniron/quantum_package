@@ -26,6 +26,7 @@ END_PROVIDER
       if(testTeethBuilding(pt2_minDetInFirstTeeth, pt2_N_teeth)) exit
     end do
   end if
+  print *, pt2_N_teeth
 END_PROVIDER
 
 

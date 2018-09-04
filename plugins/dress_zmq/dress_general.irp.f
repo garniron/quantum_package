@@ -30,7 +30,7 @@ subroutine run_dressing(N_st,energy)
     iteration = 0
     do while (delta_E > thresh_dress)
       N_det_delta_ij = N_det
-      touch N_det_delta_ij
+      touch N_det_delta_ij 
       iteration += 1
       print *,  '===============================================' 
       print *,  'Iteration', iteration, '/', n_it_dress_max
@@ -38,12 +38,12 @@ subroutine run_dressing(N_st,energy)
       print *,  ''
       E_old = dress_e0_denominator(1) !sum(ci_energy_dressed(1:N_states))
       !print *, "DELTA IJ", delta_ij(1,1,1)
-      if(.true.) dummy = delta_ij_tmp(1,1,1)
+      !if(.true.) provide delta_ij_tmp
       if(.true.) call delta_ij_done()
       do i=1,N_st
         if(.true.) call write_double(6,ci_energy_dressed(i),"Energy")
       enddo
-      if(.true.) call diagonalize_ci_dressed
+      call diagonalize_ci_dressed
       E_new = dress_e0_denominator(1) !sum(ci_energy_dressed(1:N_states))
 
       delta_E = (E_new - E_old)/dble(N_states)

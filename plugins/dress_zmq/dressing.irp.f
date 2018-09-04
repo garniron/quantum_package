@@ -89,8 +89,8 @@ BEGIN_PROVIDER [ double precision, delta_ij_tmp, (N_states,N_det_delta_ij,2) ]
   !if(N_det_delta_ij /= N_det) return
   
   
-  cnt += 1
-  if(mod(cnt,2) == 0) return
+  !cnt += 1
+  !if(mod(cnt,2) == 0) return
 
   if(.true.) then
   allocate(dress(N_states), del(N_states, N_det_delta_ij), del_s2(N_states, N_det_delta_ij))
@@ -98,13 +98,6 @@ BEGIN_PROVIDER [ double precision, delta_ij_tmp, (N_states,N_det_delta_ij,2) ]
   delta_ij_tmp = 0d0
 
   E_CI_before(:) = dress_E0_denominator(:) + nuclear_repulsion
-  !threshold_selectors = 1.d0
-  !:threshold_generators = 1d0 
-!  if(errr /= 0d0) then
-!    errr = errr / 2d0 
-!  else
-!    errr = 1d-4
-!  end if
   relative_error = 1.d-5
 
   call write_double(6,relative_error,"Convergence of the stochastic algorithm")

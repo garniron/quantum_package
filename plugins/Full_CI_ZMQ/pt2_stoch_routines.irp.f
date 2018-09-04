@@ -12,18 +12,59 @@ END_PROVIDER
 &BEGIN_PROVIDER [ integer, pt2_n_tasks_max ]
 &BEGIN_PROVIDER [ integer, pt2_F, (N_det_generators) ]
   implicit none
+  logical, external :: testTeethBuilding
   pt2_F(:) = 1
-  pt2_F(:N_det_generators/100 + 1) = 1
-  pt2_n_tasks_max = N_det_generators/100 + 1
+  !pt2_F(:N_det_generators/1000*0+50) = 1
+  pt2_n_tasks_max = 16 ! N_det_generators/100 + 1
   
-  if(N_det_generators < 256) then
+  if(N_det_generators < 1024) then
     pt2_minDetInFirstTeeth = 1
     pt2_N_teeth = 1
   else
-    pt2_minDetInFirstTeeth = 5
-    pt2_N_teeth = 16
+    do pt2_N_teeth=32,1,-1
+      pt2_minDetInFirstTeeth = min(5, N_det_generators)
+      if(testTeethBuilding(pt2_minDetInFirstTeeth, pt2_N_teeth)) exit
+    end do
   end if
 END_PROVIDER
+
+
+logical function testTeethBuilding(minF, N)
+  implicit none
+  integer, intent(in) :: minF, N
+  integer :: n0, i
+  double precision :: u0, Wt, r
+  
+  double precision, allocatable :: tilde_w(:), tilde_cW(:)
+  integer, external :: dress_find_sample
+
+  allocate(tilde_w(N_det_generators), tilde_cW(0:N_det_generators))
+  
+  tilde_cW(0) = 0d0
+  do i=1,N_det_generators
+    tilde_w(i)  = psi_coef_generators(i,pt2_stoch_istate)**2
+    tilde_cW(i) = tilde_cW(i-1) + tilde_w(i)
+  enddo
+  tilde_cW(N_det_generators) = 1d0
+ 
+  n0 = 0
+  do
+    u0 = tilde_cW(n0)
+    r = tilde_cW(n0 + minF)
+    Wt = (1d0 - u0) / dble(N)
+    if(Wt >= r - u0) then
+       testTeethBuilding = .true.
+       return
+    end if
+    n0 += 1
+    if(N_det_generators - n0 < minF * N) then
+      testTeethBuilding = .false.
+      return
+    end if
+  end do
+  stop "exited testTeethBuilding"
+end function
+
 
 
 subroutine ZMQ_pt2(E, pt2,relative_error, absolute_error, error)

@@ -473,7 +473,7 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
         error = eqt
       endif
       m += 1
-      if(eqt <=0d0* relative_error) then
+      if(eqt <= relative_error) then
         integer, external :: zmq_put_dvector
         i= zmq_put_dvector(zmq_to_qp_run_socket, worker_id, "ending", dble(m-1), 1)
         found = .true.

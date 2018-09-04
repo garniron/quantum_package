@@ -50,7 +50,7 @@ double precision :: time, time0
   edI = 0d0
   f = 0
   delta_det = 0d0
-
+  cp = 0d0
   task = CHAR(0)
   
   call omp_init_lock(sending)

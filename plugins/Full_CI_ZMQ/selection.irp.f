@@ -1,14 +1,5 @@
 use bitmasks
 
-BEGIN_PROVIDER [ integer, fragment_count ]
-  implicit none
-  BEGIN_DOC
-  ! Number of fragments for the deterministic part
-  END_DOC
-  fragment_count = (elec_alpha_num-n_core_orb)**2
-END_PROVIDER
-
-
 subroutine assert(cond, msg)
   character(*), intent(in) :: msg
   logical, intent(in) :: cond
@@ -297,8 +288,6 @@ subroutine select_singles_and_doubles(i_generator,hole_mask,particle_mask,fock_d
 
   integer(bit_kind), allocatable:: preinteresting_det(:,:,:)
   allocate (preinteresting_det(N_int,2,N_det))
-
-  !PROVIDE fragment_count
 
   monoAdo = .true.
   monoBdo = .true.

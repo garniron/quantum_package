@@ -181,7 +181,7 @@ subroutine ZMQ_pt2(E, pt2,relative_error, absolute_error, error)
       print *, '========== ================= ================= ================='
       
     enddo
-    FREE pt2_stoch_istate 
+    FREE pt2_stoch_istate
     state_average_weight(:) = state_average_weight_save(:)
     TOUCH state_average_weight
   endif
@@ -216,6 +216,7 @@ subroutine pt2_collector(zmq_socket_pull, E, relative_error, absolute_error, pt2
   integer(ZMQ_PTR),external      :: new_zmq_to_qp_run_socket
   integer(ZMQ_PTR)               :: zmq_to_qp_run_socket
   integer, external :: zmq_delete_tasks
+  integer, external :: zmq_abort
   integer, external :: pt2_find_sample
 
   integer :: more, n, i, p, c, t, n_tasks, U
@@ -235,6 +236,7 @@ subroutine pt2_collector(zmq_socket_pull, E, relative_error, absolute_error, pt2
   allocate(eI(N_states, N_det_generators), eI_task(N_states, pt2_n_tasks_max))
   allocate(S(pt2_N_teeth+1), S2(pt2_N_teeth+1))
    
+  pt2(:) = -huge(1.)
   S(:) = 0d0
   S2(:) = 0d0
   n = 1
@@ -254,10 +256,12 @@ subroutine pt2_collector(zmq_socket_pull, E, relative_error, absolute_error, pt2
       do while(d(U+1))
         U += 1
       end do
+
+      ! Deterministic part
       do while(t <= pt2_N_teeth)
         if(U >= pt2_n_0(t+1)) then
           t=t+1
-          E0 = E
+          E0 = 0.d0
           do i=pt2_n_0(t),1,-1
             E0 += eI(pt2_stoch_istate, i)
           end do
@@ -318,8 +322,13 @@ integer function pt2_find_sample(v, w)
       r = i
     end if
   end do
-
-  pt2_find_sample = r
+  i = r
+  do r=i+1,N_det_generators
+    if (w(r) /= w(i)) then 
+      exit
+    endif
+  enddo
+  pt2_find_sample = r-1
 end function
 
 
@@ -400,9 +409,22 @@ END_PROVIDER
   tilde_cW(0) = 0d0
   
   do i=1,N_det_generators
-    tilde_w(i)  = psi_coef_generators(i,pt2_stoch_istate)**2
+    tilde_w(i)  = psi_coef_generators(i,pt2_stoch_istate)**2 + 1.d-2
+  enddo
+
+  double precision :: norm
+  norm = 0.d0
+  do i=N_det_generators,1,-1
+    norm += tilde_w(i) 
+  enddo
+
+  tilde_w(:) = tilde_w(:) / norm
+
+  tilde_cW(0) = -1.d0
+  do i=1,N_det_generators
     tilde_cW(i) = tilde_cW(i-1) + tilde_w(i)
   enddo
+  tilde_cW(:) = tilde_cW(:) + 1.d0
   
   pt2_n_0(1) = 0
   do

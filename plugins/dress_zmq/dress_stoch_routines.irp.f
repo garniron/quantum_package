@@ -276,7 +276,6 @@ subroutine ZMQ_dress(E, dress, delta_out, delta_s2_out, relative_error)
     
     call omp_set_nested(.true.)
 
-if (.true.) then !! TODO
     !$OMP PARALLEL DEFAULT(shared) NUM_THREADS(2)              &
         !$OMP  PRIVATE(i)
     i = omp_get_thread_num()
@@ -287,12 +286,6 @@ if (.true.) then !! TODO
       call dress_slave_inproc(i)
     endif
     !$OMP END PARALLEL
-
-else
-
-    call dress_collector(zmq_socket_pull,E, relative_error, delta, delta_s2, dress,&
-         dress_stoch_istate)
-endif
 
     call omp_set_nested(.false.)
     delta_out(dress_stoch_istate,1:N_det) = delta(dress_stoch_istate,1:N_det)

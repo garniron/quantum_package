@@ -267,7 +267,7 @@ subroutine pt2_collector(zmq_socket_pull, E, relative_error, absolute_error, pt2
       end do
 
       c = pt2_R(n)
-      if(c /= 0) then
+      if(c > 1) then
         x = 0d0
         do p=pt2_N_teeth, 1, -1
           v = pt2_u_0 + pt2_W_T * (pt2_u(c) + dble(p-1))
@@ -278,7 +278,7 @@ subroutine pt2_collector(zmq_socket_pull, E, relative_error, absolute_error, pt2
         end do
         avg = S(t) / dble(c)
         eqt = (S2(t) / c) - (S(t)/c)**2
-        eqt = sqrt(eqt / dble(c-1+1))
+        eqt = sqrt(eqt / dble(c-1))
         pt2(pt2_stoch_istate) = E0-E+avg
         error(pt2_stoch_istate) = eqt
         time = omp_get_wtime()

@@ -85,7 +85,7 @@ subroutine run_selection_slave_new(thread,iproc,energy)
     do k=1,n_tasks
         pt2(:,k) = 0.d0
         buf%cur = 0
-        call select_connected(i_generator(k),energy,pt2(1,k),buf,subset(k))
+        call select_connected(i_generator(k),energy,pt2(1,k),buf,subset(k),fragment_count)
     enddo
     call wall_time(time1)
 

@@ -47,7 +47,7 @@ logical function testTeethBuilding(minF, N)
   allocate(tilde_w(N_det_generators), tilde_cW(0:N_det_generators))
   
   do i=1,N_det_generators
-    tilde_w(i)  = psi_coef_generators(i,pt2_stoch_istate)**2 + 1.d-20
+    tilde_w(i)  = psi_coef_sorted_gen(i,pt2_stoch_istate)**2 + 1.d-20
   enddo
 
   double precision :: norm
@@ -185,6 +185,8 @@ subroutine ZMQ_pt2(E, pt2,relative_error, absolute_error, error)
         nproc_target = min(nproc_target,nproc)
       endif
 
+      call omp_set_nested(.true.)
+
       !$OMP PARALLEL DEFAULT(shared) NUM_THREADS(nproc_target+1)            &
           !$OMP  PRIVATE(i)
       i = omp_get_thread_num()
@@ -200,6 +202,8 @@ subroutine ZMQ_pt2(E, pt2,relative_error, absolute_error, error)
       print *, '========== ================= ================= ================='
       
     enddo
+!    call omp_set_nested(.false.)
+
     FREE pt2_stoch_istate
     state_average_weight(:) = state_average_weight_save(:)
     TOUCH state_average_weight
@@ -442,7 +446,7 @@ END_PROVIDER
   tilde_cW(0) = 0d0
   
   do i=1,N_det_generators
-    tilde_w(i)  = psi_coef_generators(i,pt2_stoch_istate)**2 + 1.d-20
+    tilde_w(i)  = psi_coef_sorted_gen(i,pt2_stoch_istate)**2 + 1.d-20
   enddo
 
   double precision :: norm

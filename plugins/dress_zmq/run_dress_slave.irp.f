@@ -8,7 +8,7 @@ subroutine run_dress_slave(thread,iproce,energy)
 
   double precision, intent(in)    :: energy(N_states_diag)
   integer,  intent(in)            :: thread, iproce
-  integer                        :: rc, i, subset, i_generator
+  integer                        :: rc, i, j, subset, i_generator
 
   integer                        :: worker_id, ctask, ltask
   character*(512)                :: task(Nproc)
@@ -39,7 +39,7 @@ subroutine run_dress_slave(thread,iproce,energy)
   double precision :: ending(1)
   integer, external :: zmq_get_dvector
 ! double precision, external :: omp_get_wtime
-double precision :: time, time0
+  double precision :: time, time0
   integer :: ntask_tbd, task_tbd(Nproc), i_gen_tbd(Nproc), subset_tbd(Nproc)
 !  if(iproce /= 0) stop "RUN DRESS SLAVE is OMP"
   
@@ -162,23 +162,31 @@ double precision :: time, time0
       t = dress_T(i_generator)
     
       call omp_set_lock(lck_det(t))
-      delta_det(:,:,t, 1) += breve_delta_m(:,:,1)
-      delta_det(:,:,t, 2) += breve_delta_m(:,:,2)
+      do j=1,N_det
+        do i=1,N_states
+          delta_det(i,j,t, 1) = delta_det(i,j,t, 1) + breve_delta_m(i,j,1)
+          delta_det(i,j,t, 2) = delta_det(i,j,t, 2) + breve_delta_m(i,j,2)
+         enddo
+      enddo
       call omp_unset_lock(lck_det(t))
     
       do p=1,dress_N_cp
         if(dress_e(i_generator, p) /= 0d0) then
           fac = dress_e(i_generator, p)
           call omp_set_lock(lck_sto(p))
-          cp(:,:,p,1) += breve_delta_m(:,:,1) * fac
-          cp(:,:,p,2) += breve_delta_m(:,:,2) * fac
+          do j=1,N_det
+            do i=1,N_states
+              cp(i,j,p,1) = cp(i,j,p,1) + breve_delta_m(i,j,1) * fac
+              cp(i,j,p,2) = cp(i,j,p,2) + breve_delta_m(i,j,2) * fac
+            enddo
+          enddo
           call omp_unset_lock(lck_sto(p))
         end if
       end do
       
       tmp = 0d0
       do i=N_det,1,-1
-        tmp += psi_coef(i, dress_stoch_istate)*breve_delta_m(dress_stoch_istate, i, 1)
+        tmp += psi_coef_sorted_gen(i, dress_stoch_istate)*breve_delta_m(dress_stoch_istate, i, 1)
       end do
       !$OMP ATOMIC
       edI(i_generator) += tmp

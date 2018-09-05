@@ -1,6 +1,9 @@
 BEGIN_PROVIDER [ integer, dress_stoch_istate ]
-  implicit none
-  dress_stoch_istate = 1
+ implicit none
+ BEGIN_DOC
+ ! State for stochatsic dressing
+ END_DOC
+ dress_stoch_istate = 1
 END_PROVIDER
 
  BEGIN_PROVIDER [ integer, pt2_N_teeth ]
@@ -9,19 +12,25 @@ END_PROVIDER
 &BEGIN_PROVIDER [ integer, pt2_F, (N_det_generators) ]
   implicit none
   logical, external :: testTeethBuilding
+  integer :: i
   pt2_F(:) = 1
-  !pt2_F(:N_det_generators/1000*0+50) = 1
-  pt2_n_tasks_max = 16 ! N_det_generators/100 + 1
+  pt2_n_tasks_max = 20
+!  do i=1,N_det_generators
+!    if (maxval(dabs(psi_coef_sorted_gen(i,:))) > 0.001d0) then
+!      pt2_F(i) = max(1,min( (elec_alpha_num-n_core_orb)**2, pt2_n_tasks_max))
+!    endif
+!  enddo
   
   if(N_det_generators < 1024) then
     pt2_minDetInFirstTeeth = 1
     pt2_N_teeth = 1
   else
-    do pt2_N_teeth=32,1,-1
-      pt2_minDetInFirstTeeth = min(5, N_det_generators)
+    pt2_minDetInFirstTeeth = min(5, N_det_generators)
+    do pt2_N_teeth=100,2,-1
       if(testTeethBuilding(pt2_minDetInFirstTeeth, pt2_N_teeth)) exit
     end do
   end if
+  call write_int(6,pt2_N_teeth,'Number of comb teeth')
 END_PROVIDER
 
 
@@ -36,25 +45,39 @@ logical function testTeethBuilding(minF, N)
 
   allocate(tilde_w(N_det_generators), tilde_cW(0:N_det_generators))
   
-  tilde_cW(0) = 0d0
   do i=1,N_det_generators
-    tilde_w(i)  = psi_coef_generators(i,dress_stoch_istate)**2
+    tilde_w(i)  = psi_coef_sorted_gen(i,dress_stoch_istate)**2 + 1.d-20
+  enddo
+
+  double precision :: norm
+  norm = 0.d0
+  do i=N_det_generators,1,-1
+    norm += tilde_w(i) 
+  enddo
+
+  tilde_w(:) = tilde_w(:) / norm
+
+  tilde_cW(0) = -1.d0
+  do i=1,N_det_generators
     tilde_cW(i) = tilde_cW(i-1) + tilde_w(i)
   enddo
-  tilde_cW(N_det_generators) = 1d0
- 
+  tilde_cW(:) = tilde_cW(:) + 1.d0
+
   n0 = 0
+  testTeethBuilding = .false.
   do
     u0 = tilde_cW(n0)
     r = tilde_cW(n0 + minF)
     Wt = (1d0 - u0) / dble(N)
+    if (dabs(Wt) <= 1.d-3) then
+      return
+    endif
     if(Wt >= r - u0) then
        testTeethBuilding = .true.
        return
     end if
     n0 += 1
     if(N_det_generators - n0 < minF * N) then
-      testTeethBuilding = .false.
       return
     end if
   end do
@@ -196,6 +219,7 @@ END_PROVIDER
 
 subroutine ZMQ_dress(E, dress, delta_out, delta_s2_out, relative_error)
   use f77_zmq
+  use selection_types
   
   implicit none
   
@@ -218,14 +242,11 @@ subroutine ZMQ_dress(E, dress, delta_out, delta_s2_out, relative_error)
   allocate(delta(N_states,N_det), delta_s2(N_states, N_det))
   state_average_weight_save(:) = state_average_weight(:)
   do dress_stoch_istate=1,N_states
-    SOFT_TOUCH dress_stoch_istate
     state_average_weight(:) = 0.d0
     state_average_weight(dress_stoch_istate) = 1.d0
-    TOUCH state_average_weight
+    TOUCH state_average_weight dress_stoch_istate
     
-    !provide psi_coef_generators
-    provide nproc mo_bielec_integrals_in_map mo_mono_elec_integral psi_selectors
-    !print *, dress_e0_denominator
+    provide nproc mo_bielec_integrals_in_map mo_mono_elec_integral psi_selectors pt2_F
     
     print *, '========== ================= ================= ================='
     print *, ' Samples        Energy         Stat. Error         Seconds      '
@@ -274,6 +295,16 @@ subroutine ZMQ_dress(E, dress, delta_out, delta_s2_out, relative_error)
       print *,  irp_here, ': Failed in zmq_set_running'
     endif
     
+    integer :: nproc_target
+    nproc_target = nproc
+    double precision :: mem
+    mem = 8.d0 * N_det * (N_int * 2.d0 * 3.d0 +  3.d0 + 5.d0) / (1024.d0**3)
+    call write_double(6,mem,'Estimated memory/thread (Gb)')
+    if (qp_max_mem > 0) then
+      nproc_target = max(1,int(dble(qp_max_mem)/mem))
+      nproc_target = min(nproc_target,nproc)
+    endif
+
     call omp_set_nested(.true.)
 
     !$OMP PARALLEL DEFAULT(shared) NUM_THREADS(2)              &
@@ -287,7 +318,6 @@ subroutine ZMQ_dress(E, dress, delta_out, delta_s2_out, relative_error)
     endif
     !$OMP END PARALLEL
 
-    call omp_set_nested(.false.)
     delta_out(dress_stoch_istate,1:N_det) = delta(dress_stoch_istate,1:N_det)
     delta_s2_out(dress_stoch_istate,1:N_det) = delta_s2(dress_stoch_istate,1:N_det)
     
@@ -297,6 +327,7 @@ subroutine ZMQ_dress(E, dress, delta_out, delta_s2_out, relative_error)
   enddo
   FREE dress_stoch_istate
   state_average_weight(:) = state_average_weight_save(:)
+!    call omp_set_nested(.false.)
   TOUCH state_average_weight
   deallocate(delta,delta_s2)
   
@@ -440,7 +471,7 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
     if(dot_f(m) == 0) then
       E0 = 0
       do i=dress_dot_n_0(m),1,-1
-        E0 += edI(dress_stoch_istate, i)
+        E0 += edI(istate, i)
       end do
       do while(c < dress_M_m(m))
         c = c+1
@@ -448,7 +479,7 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
         do p=pt2_N_teeth, 1, -1
           v = pt2_u_0 + pt2_W_T * (pt2_u(c) + dble(p-1))
           i = dress_find_sample(v, pt2_cW)
-          x += edI(dress_stoch_istate, i) * pt2_W_T / pt2_w(i)
+          x += edI(istate, i) * pt2_W_T / pt2_w(i)
           S(p) += x
           S2(p) += x**2
         end do
@@ -460,7 +491,7 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
         eqt = sqrt(eqt / (dble(c)-1.5d0))
         error = eqt
         time = omp_get_wtime()
-        print '(G10.3, 2X, F16.10, 2X, G16.3, 2X, F16.4, A20)', c, avg+E(dress_stoch_istate), eqt, time-time0, ''
+        print '(G10.3, 2X, F16.10, 2X, G16.3, 2X, F16.4, A20)', c, avg+E(istate), eqt, time-time0, ''
       else
         eqt = 1.d0
         error = eqt
@@ -531,7 +562,7 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
 
   !do i=1,N_det
   !  if(edi(1,i) == 0d0) stop "EMPTY"
-  !  tmp += psi_coef(i, 1) * delta(1, i)
+  !  tmp += psi_coef_sorted_gen(i, 1) * delta(1, i)
   !end do
   !print *, "SUM", E(1)+sum(edi(1,:))
   !print *, "DOT", E(1)+tmp
@@ -556,8 +587,13 @@ integer function dress_find_sample(v, w)
       r = i
     end if
   end do
-
-  dress_find_sample = r
+  i = r
+  do r=i+1,N_det_generators
+    if (w(r) /= w(i)) then 
+      exit
+    endif
+  enddo
+  dress_find_sample = r-1
 end function
 
 
@@ -575,13 +611,24 @@ end function
 
   allocate(tilde_w(N_det_generators), tilde_cW(0:N_det_generators))
   
-  tilde_cW(0) = 0d0
-  
   do i=1,N_det_generators
-    tilde_w(i)  = psi_coef_generators(i,dress_stoch_istate)**2
+    tilde_w(i)  = psi_coef_sorted_gen(i,dress_stoch_istate)**2 + 1.d-20
     tilde_cW(i) = tilde_cW(i-1) + tilde_w(i)
   enddo
-  tilde_cW(N_det_generators) = 1d0
+
+  double precision :: norm
+  norm = 0.d0
+  do i=N_det_generators,1,-1
+    norm += tilde_w(i) 
+  enddo
+
+  tilde_w(:) = tilde_w(:) / norm
+
+  tilde_cW(0) = -1.d0
+  do i=1,N_det_generators
+    tilde_cW(i) = tilde_cW(i-1) + tilde_w(i)
+  enddo
+  tilde_cW(:) = tilde_cW(:) + 1.d0
   
   pt2_n_0(1) = 0
   do
@@ -608,6 +655,10 @@ end function
   pt2_w(:pt2_n_0(1)) = tilde_w(:pt2_n_0(1))
   do t=1, pt2_N_teeth
     tooth_width = tilde_cW(pt2_n_0(t+1)) - tilde_cW(pt2_n_0(t))
+    if (tooth_width == 0.d0) then
+      tooth_width = sum(tilde_w(pt2_n_0(t):pt2_n_0(t+1)))
+    endif
+    ASSERT(tooth_width > 0.d0)
     do i=pt2_n_0(t)+1, pt2_n_0(t+1)
       pt2_w(i) = tilde_w(i) * pt2_W_T / tooth_width
     end do
@@ -619,5 +670,8 @@ end function
   end do
   pt2_n_0(pt2_N_teeth+1) = N_det_generators
 END_PROVIDER
+
+
+
 
 

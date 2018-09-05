@@ -77,7 +77,6 @@ subroutine run_pt2_slave(thread,iproc,energy)
 
     ! Try to adjust n_tasks around 1 second per job
     n_tasks = min(n_tasks,int( 1.d0*dble(n_tasks) / (time1 - time0 + 1.d-9)))+1
-!     n_tasks = n_tasks+1
   end do
 
   integer, external :: disconnect_from_taskserver

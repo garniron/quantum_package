@@ -13,20 +13,25 @@ END_PROVIDER
 &BEGIN_PROVIDER [ integer, pt2_F, (N_det_generators) ]
   implicit none
   logical, external :: testTeethBuilding
+  integer :: i
   pt2_F(:) = 1
-  !pt2_F(:N_det_generators/1000*0+50) = 1
-  pt2_n_tasks_max = 16 ! N_det_generators/100 + 1
+  pt2_n_tasks_max = N_det_generators/100 + 1
+  do i=1,N_det_generators
+    if (maxval(dabs(psi_coef_sorted_gen(i,:))) > 0.001d0) then
+      pt2_F(i) = max(1,min( (elec_alpha_num-n_core_orb)**2, pt2_n_tasks_max))
+    endif
+  enddo
   
   if(N_det_generators < 1024) then
     pt2_minDetInFirstTeeth = 1
     pt2_N_teeth = 1
   else
-    do pt2_N_teeth=32,1,-1
-      pt2_minDetInFirstTeeth = min(5, N_det_generators)
+    pt2_minDetInFirstTeeth = min(5, N_det_generators)
+    do pt2_N_teeth=100,2,-1
       if(testTeethBuilding(pt2_minDetInFirstTeeth, pt2_N_teeth)) exit
     end do
   end if
-  print *, pt2_N_teeth
+  call write_int(6,pt2_N_teeth,'Number of comb teeth')
 END_PROVIDER
 
 
@@ -41,25 +46,39 @@ logical function testTeethBuilding(minF, N)
 
   allocate(tilde_w(N_det_generators), tilde_cW(0:N_det_generators))
   
-  tilde_cW(0) = 0d0
   do i=1,N_det_generators
-    tilde_w(i)  = psi_coef_generators(i,pt2_stoch_istate)**2
+    tilde_w(i)  = psi_coef_generators(i,pt2_stoch_istate)**2 + 1.d-20
+  enddo
+
+  double precision :: norm
+  norm = 0.d0
+  do i=N_det_generators,1,-1
+    norm += tilde_w(i) 
+  enddo
+
+  tilde_w(:) = tilde_w(:) / norm
+
+  tilde_cW(0) = -1.d0
+  do i=1,N_det_generators
     tilde_cW(i) = tilde_cW(i-1) + tilde_w(i)
   enddo
-  tilde_cW(N_det_generators) = 1d0
- 
+  tilde_cW(:) = tilde_cW(:) + 1.d0
+
   n0 = 0
+  testTeethBuilding = .false.
   do
     u0 = tilde_cW(n0)
     r = tilde_cW(n0 + minF)
     Wt = (1d0 - u0) / dble(N)
+    if (dabs(Wt) <= 1.d-3) then
+      return
+    endif
     if(Wt >= r - u0) then
        testTeethBuilding = .true.
        return
     end if
     n0 += 1
     if(N_det_generators - n0 < minF * N) then
-      testTeethBuilding = .false.
       return
     end if
   end do
@@ -142,7 +161,7 @@ subroutine ZMQ_pt2(E, pt2,relative_error, absolute_error, error)
       
       
       do i=1,N_det_generators
-        do j=1,pt2_F(i) !!!!!!!!!!!! 
+        do j=1,pt2_F(pt2_J(i)) !!!!!!!!!!!! 
           write(task(1:20),'(I9,1X,I9''|'')') j, pt2_J(i)
           if (add_task_to_taskserver(zmq_to_qp_run_socket,trim(task(1:20))) == -1) then
             stop 'Unable to add task to task server'
@@ -270,8 +289,9 @@ subroutine pt2_collector(zmq_socket_pull, E, relative_error, absolute_error, pt2
         end if
       end do
 
+      ! Add Stochastic part
       c = pt2_R(n)
-      if(c > 1) then
+      if(c > 0) then
         x = 0d0
         do p=pt2_N_teeth, 1, -1
           v = pt2_u_0 + pt2_W_T * (pt2_u(c) + dble(p-1))
@@ -280,13 +300,26 @@ subroutine pt2_collector(zmq_socket_pull, E, relative_error, absolute_error, pt2
           S(p) += x
           S2(p) += x**2
         end do
-        avg = S(t) / dble(c)
-        eqt = (S2(t) / c) - (S(t)/c)**2
-        eqt = sqrt(eqt / dble(c-1))
-        pt2(pt2_stoch_istate) = E0-E+avg
-        error(pt2_stoch_istate) = eqt
+        avg = E0 + S(t) / dble(c)
+        pt2(pt2_stoch_istate) = avg
+        ! 1/(N-1.5) : see  Brugger, The American Statistician (23) 4 p. 32 (1969)
+        if(c > 2) then
+          eqt = dabs((S2(t) / c) - (S(t)/c)**2) ! dabs for numerical stability
+          eqt = sqrt(eqt / (dble(c) - 1.5d0))  
+          error(pt2_stoch_istate) = eqt
+          if(mod(c,10)==3 .or. n==N_det_generators) then
+            print '(G10.3, 2X, F16.10, 2X, G16.3, 2X, F16.4, A20)', c, avg+E, eqt, time-time0, ''
+            if( dabs(error(pt2_stoch_istate) / pt2(pt2_stoch_istate)) < relative_error) then
+              if (zmq_abort(zmq_to_qp_run_socket) == -1) then
+                call sleep(1)
+                if (zmq_abort(zmq_to_qp_run_socket) == -1) then
+                  print *, irp_here, ': Error in sending abort signal (2)'
+                endif
+              endif
+            endif
+          endif
+        endif
         time = omp_get_wtime()
-        if(mod(c,10)==1 .or. n==N_det_generators) print '(G10.3, 2X, F16.10, 2X, G16.3, 2X, F16.4, A20)', c, avg+E0, eqt, time-time0, ''
       end if
       n += 1
     else if(more == 0) then
@@ -409,7 +442,7 @@ END_PROVIDER
   tilde_cW(0) = 0d0
   
   do i=1,N_det_generators
-    tilde_w(i)  = psi_coef_generators(i,pt2_stoch_istate)**2 + 1.d-2
+    tilde_w(i)  = psi_coef_generators(i,pt2_stoch_istate)**2 + 1.d-20
   enddo
 
   double precision :: norm
@@ -451,6 +484,10 @@ END_PROVIDER
   pt2_w(:pt2_n_0(1)) = tilde_w(:pt2_n_0(1))
   do t=1, pt2_N_teeth
     tooth_width = tilde_cW(pt2_n_0(t+1)) - tilde_cW(pt2_n_0(t))
+    if (tooth_width == 0.d0) then
+      tooth_width = sum(tilde_w(pt2_n_0(t):pt2_n_0(t+1)))
+    endif
+    ASSERT(tooth_width > 0.d0)
     do i=pt2_n_0(t)+1, pt2_n_0(t+1)
       pt2_w(i) = tilde_w(i) * pt2_W_T / tooth_width
     end do

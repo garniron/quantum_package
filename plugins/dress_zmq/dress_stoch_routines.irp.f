@@ -454,19 +454,19 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
         end do
       end do
       t = dress_dot_t(m)
-      avg = S(t) / dble(c)
-      if (c > 1) then
+      avg = E0 + S(t) / dble(c)
+      if (c > 2) then
         eqt = (S2(t) / c) - (S(t)/c)**2
-        eqt = sqrt(eqt / dble(c-1))
+        eqt = sqrt(eqt / (dble(c)-1.5d0))
         error = eqt
         time = omp_get_wtime()
-        print '(G10.3, 2X, F16.10, 2X, G16.3, 2X, F16.4, A20)', c, avg+E0+E(dress_stoch_istate), eqt, time-time0, ''
+        print '(G10.3, 2X, F16.10, 2X, G16.3, 2X, F16.4, A20)', c, avg+E(dress_stoch_istate), eqt, time-time0, ''
       else
         eqt = 1.d0
         error = eqt
       endif
       m += 1
-      if(eqt <= relative_error) then
+      if(dabs(error / avg) <= relative_error) then
         integer, external :: zmq_put_dvector
         i= zmq_put_dvector(zmq_to_qp_run_socket, worker_id, "ending", dble(m-1), 1)
         found = .true.

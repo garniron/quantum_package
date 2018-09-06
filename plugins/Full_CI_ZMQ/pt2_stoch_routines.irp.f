@@ -17,8 +17,8 @@ END_PROVIDER
   pt2_F(:) = 1
   pt2_n_tasks_max = N_det_generators/100 + 1
   do i=1,N_det_generators
-    if (maxval(dabs(psi_coef_sorted_gen(i,:))) > 0.001d0) then
-      pt2_F(i) = max(1,min( (elec_alpha_num-n_core_orb)**2, pt2_n_tasks_max))
+    if (maxval(dabs(psi_coef_sorted_gen(i,:))) > 0.005d0) then
+      pt2_F(i) = max(1,min( ((elec_alpha_num-n_core_orb)**2)/4, pt2_n_tasks_max))
     endif
   enddo
   
@@ -93,14 +93,13 @@ subroutine ZMQ_pt2(E, pt2,relative_error, error)
   
   implicit none
   
-  character(len=64000)           :: task
   integer(ZMQ_PTR)               :: zmq_to_qp_run_socket, zmq_socket_pull
   integer, external              :: omp_get_thread_num
   double precision, intent(in)   :: relative_error, E(N_states)
   double precision, intent(out)  :: pt2(N_states),error(N_states)
   
   
-  integer                        :: i, j, k
+  integer                        :: i
   
   double precision, external     :: omp_get_wtime
   double precision               :: state_average_weight_save(N_states), w(N_states)
@@ -158,16 +157,28 @@ subroutine ZMQ_pt2(E, pt2,relative_error, error)
 
 
       integer, external :: add_task_to_taskserver
-      
-      
-      do i=1,N_det_generators
-        do j=1,pt2_F(pt2_J(i)) !!!!!!!!!!!! 
-          write(task(1:20),'(I9,1X,I9''|'')') j, pt2_J(i)
-          if (add_task_to_taskserver(zmq_to_qp_run_socket,trim(task(1:20))) == -1) then
-            stop 'Unable to add task to task server'
+      character(len=64000)           :: task
+      integer :: j,k,ipos
+      ipos=1
+      task = ' ' 
+
+      do i= 1, N_det_generators
+        do j=1,pt2_F(pt2_J(i))
+          write(task(ipos:ipos+20),'(I9,1X,I9,''|'')') j, pt2_J(i)
+          ipos += 20
+          if (ipos > 63980) then
+            if (add_task_to_taskserver(zmq_to_qp_run_socket,trim(task(1:ipos))) == -1) then
+              stop 'Unable to add task to task server'
+            endif
+            ipos=1
           endif
         end do
-      end do
+      enddo
+      if (ipos > 1) then
+        if (add_task_to_taskserver(zmq_to_qp_run_socket,trim(task(1:ipos))) == -1) then
+          stop 'Unable to add task to task server'
+        endif
+      endif
       
       integer, external :: zmq_set_running
       if (zmq_set_running(zmq_to_qp_run_socket) == -1) then

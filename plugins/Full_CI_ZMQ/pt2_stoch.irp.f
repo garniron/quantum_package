@@ -12,7 +12,7 @@ subroutine run
   integer                        :: i,j,k
   logical, external              :: detEq
   
-  double precision, allocatable  :: pt2(N_states)
+  double precision               :: pt2(N_states)
   integer                        :: degree
   integer                        :: n_det_before, to_select
   double precision               :: threshold_davidson_in
@@ -27,13 +27,12 @@ subroutine run
   relative_error=PT2_relative_error
   
   call ZMQ_pt2(E_CI_before, pt2, relative_error, error)
-  integer                        :: k
   do k=1,N_states
     print *,  'State      ', k
     print *,  'N_det    = ', N_det
     print *,  'PT2      = ', pt2
     print *,  'E        = ', E_CI_before(k)
-    print *,  'E+PT2    = ', E_CI_before(k)+pt2(k), ' +/- ', eqt(k)
+    print *,  'E+PT2    = ', E_CI_before(k)+pt2(k), ' +/- ', error(k)
     print *,  '-----'
   enddo
   call ezfio_set_full_ci_zmq_energy_pt2(E_CI_before(1)+pt2(1))

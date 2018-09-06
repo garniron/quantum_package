@@ -58,8 +58,8 @@ subroutine ZMQ_selection(N_in, pt2)
   task = ' ' 
 
   do i= 1, N_det_generators
-    do j=1,pt2_F(i)
-      write(task(ipos:ipos+30),'(I9,1X,I9,1X,I9,''|'')') j, i, N
+    do j=1,pt2_F(pt2_J(i))
+      write(task(ipos:ipos+30),'(I9,1X,I9,1X,I9,''|'')') j, pt2_J(i), N
       ipos += 30
       if (ipos > 63970) then
         if (add_task_to_taskserver(zmq_to_qp_run_socket,trim(task(1:ipos))) == -1) then

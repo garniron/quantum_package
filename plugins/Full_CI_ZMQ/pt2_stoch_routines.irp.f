@@ -87,7 +87,7 @@ end function
 
 
 
-subroutine ZMQ_pt2(E, pt2,relative_error, absolute_error, error)
+subroutine ZMQ_pt2(E, pt2,relative_error, error)
   use f77_zmq
   use selection_types
   
@@ -96,7 +96,7 @@ subroutine ZMQ_pt2(E, pt2,relative_error, absolute_error, error)
   character(len=64000)           :: task
   integer(ZMQ_PTR)               :: zmq_to_qp_run_socket, zmq_socket_pull
   integer, external              :: omp_get_thread_num
-  double precision, intent(in)   :: relative_error, absolute_error, E(N_states)
+  double precision, intent(in)   :: relative_error, E(N_states)
   double precision, intent(out)  :: pt2(N_states),error(N_states)
   
   
@@ -191,7 +191,7 @@ subroutine ZMQ_pt2(E, pt2,relative_error, absolute_error, error)
           !$OMP  PRIVATE(i)
       i = omp_get_thread_num()
       if (i==0) then
-        call pt2_collector(zmq_socket_pull, E(pt2_stoch_istate),relative_error, absolute_error, w, error)
+        call pt2_collector(zmq_socket_pull, E(pt2_stoch_istate),relative_error, w, error)
         pt2(pt2_stoch_istate) = w(pt2_stoch_istate)
       else
         call pt2_slave_inproc(i)
@@ -223,7 +223,7 @@ subroutine pt2_slave_inproc(i)
 end
 
 
-subroutine pt2_collector(zmq_socket_pull, E, relative_error, absolute_error, pt2, error)
+subroutine pt2_collector(zmq_socket_pull, E, relative_error, pt2, error)
   use f77_zmq
   use selection_types
   use bitmasks
@@ -231,7 +231,7 @@ subroutine pt2_collector(zmq_socket_pull, E, relative_error, absolute_error, pt2
 
   
   integer(ZMQ_PTR), intent(in)   :: zmq_socket_pull
-  double precision, intent(in) :: relative_error, absolute_error, E
+  double precision, intent(in) :: relative_error, E
   double precision, intent(out)  :: pt2(N_states), error(N_states)
 
 
@@ -311,7 +311,7 @@ subroutine pt2_collector(zmq_socket_pull, E, relative_error, absolute_error, pt2
           eqt = dabs((S2(t) / c) - (S(t)/c)**2) ! dabs for numerical stability
           eqt = sqrt(eqt / (dble(c) - 1.5d0))  
           error(pt2_stoch_istate) = eqt
-          if(mod(c,10)==3 .or. n==N_det_generators) then
+          if(mod(c,10)==0 .or. n==N_det_generators) then
             print '(G10.3, 2X, F16.10, 2X, G16.3, 2X, F16.4, A20)', c, avg+E, eqt, time-time0, ''
             if( dabs(error(pt2_stoch_istate) / pt2(pt2_stoch_istate)) < relative_error) then
               if (zmq_abort(zmq_to_qp_run_socket) == -1) then

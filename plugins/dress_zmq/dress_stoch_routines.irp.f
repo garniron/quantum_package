@@ -141,19 +141,15 @@ END_PROVIDER
   N_j = pt2_n_0(1)
   d(:) = .false.
   
-  U = min(1, N_det_generators/(dress_N_cp_max**2/2))
-  do i=1,dress_N_cp_max-1
-    dress_M_m(i) = U * ((i**2-i)/2)! / (dress_N_cp_max+1)
+  ! Set here the positions of the checkpoints
+!  U = N_det_generators/((dress_N_cp_max**2+dress_N_cp_max)/2)+1
+!  do i=1, dress_N_cp_max-1
+!    dress_M_m(i) = U * (((i*i)+i)/2) + 10
+!  end do
+!  dress_M_m(dress_N_cp_max) = N_det_generators+1
+  do i=1, dress_N_cp_max-1
+    dress_M_m(i) = ishft(1,i+3)
   end do
-
-  
-  
-  U = N_det_generators/((dress_N_cp_max**2+dress_N_cp_max)/2)+1
-  do i=1, dress_N_cp_max
-    dress_M_m(i) = U * (((i*i)+i)/2)
-  end do
-
-  dress_M_m(1) = min(dress_M_m(1), 2)
   dress_M_m(dress_N_cp_max) = N_det_generators+1
 
   do i=1,N_j
@@ -425,7 +421,7 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
   double precision, intent(out)  :: delta(N_states, N_det)
   double precision, intent(out)  :: delta_s2(N_states, N_det)
   double precision, allocatable  :: breve_delta_m(:,:,:), S(:), S2(:)
-  double precision, allocatable  :: edI(:,:), edI_task(:,:)
+  double precision, allocatable  :: edI(:), edI_task(:)
   integer, allocatable           :: edI_index(:)
   integer(ZMQ_PTR),external      :: new_zmq_to_qp_run_socket
   integer(ZMQ_PTR)               :: zmq_to_qp_run_socket
@@ -449,8 +445,8 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
   delta = 0d0
   delta_s2 = 0d0
   allocate(task_id(pt2_n_tasks_max))
-  allocate(edI(N_states, N_det))
-  allocate(edI_task(N_states, N_det), edI_index(N_det))
+  allocate(edI(N_det_generators))
+  allocate(edI_task(N_det_generators), edI_index(N_det_generators))
   allocate(breve_delta_m(N_states, N_det, 2))
   allocate(dot_f(dress_N_cp+1))
   allocate(S(pt2_N_teeth+1), S2(pt2_N_teeth+1))
@@ -471,7 +467,7 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
     if(dot_f(m) == 0) then
       E0 = 0
       do i=dress_dot_n_0(m),1,-1
-        E0 += edI(istate, i)
+        E0 += edI(i)
       end do
       do while(c < dress_M_m(m))
         c = c+1
@@ -479,7 +475,7 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
         do p=pt2_N_teeth, 1, -1
           v = pt2_u_0 + pt2_W_T * (pt2_u(c) + dble(p-1))
           i = dress_find_sample(v, pt2_cW)
-          x += edI(istate, i) * pt2_W_T / pt2_w(i)
+          x += edI(i) * pt2_W_T / pt2_w(i)
           S(p) += x
           S2(p) += x**2
         end do
@@ -487,7 +483,7 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
       t = dress_dot_t(m)
       avg = E0 + S(t) / dble(c)
       if (c > 2) then
-        eqt = (S2(t) / c) - (S(t)/c)**2
+        eqt = dabs((S2(t) / c) - (S(t)/c)**2)
         eqt = sqrt(eqt / (dble(c)-1.5d0))
         error = eqt
         time = omp_get_wtime()
@@ -520,8 +516,8 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
         end if
       end do
       do i=1,n_tasks
-        if(edI(1, edI_index(i)) /= 0d0) stop "NIN M"
-        edI(:, edI_index(i)) += edI_task(:, i) 
+        if(edI(edI_index(i)) /= 0d0) stop "NIN M"
+        edI(edI_index(i)) += edI_task(i) 
       end do
       dot_f(m_task) -= f
     end if
@@ -561,10 +557,10 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
   !tmp = 0d0
 
   !do i=1,N_det
-  !  if(edi(1,i) == 0d0) stop "EMPTY"
-  !  tmp += psi_coef_sorted_gen(i, 1) * delta(1, i)
+  !  if(edi(i) == 0d0) stop "EMPTY"
+  !  tmp += psi_coef(i, 1) * delta(1, i)
   !end do
-  !print *, "SUM", E(1)+sum(edi(1,:))
+  !print *, "SUM", E(1)+sum(edi(:))
   !print *, "DOT", E(1)+tmp
   call disconnect_from_taskserver(zmq_to_qp_run_socket,worker_id)
   call end_zmq_to_qp_run_socket(zmq_to_qp_run_socket)

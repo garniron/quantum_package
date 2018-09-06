@@ -10,12 +10,11 @@ program fci_zmq
 
   double precision               :: hf_energy_ref
   logical                        :: has
-  double precision               :: relative_error, absolute_error
+  double precision               :: relative_error
   integer                        :: N_states_p
   character*(512)                :: fmt
 
   relative_error=PT2_relative_error
-  absolute_error=PT2_absolute_error
 
   pt2 = -huge(1.e0)
   threshold_davidson_in = threshold_davidson
@@ -72,7 +71,7 @@ program fci_zmq
         threshold_selectors = 1.d0
         threshold_generators = 1.d0 
         SOFT_TOUCH threshold_selectors threshold_generators
-        call ZMQ_pt2(CI_energy, pt2,relative_error,absolute_error,error) ! Stochastic PT2
+        call ZMQ_pt2(CI_energy, pt2,relative_error,error) ! Stochastic PT2
         threshold_selectors = threshold_selectors_save
         threshold_generators = threshold_generators_save
         SOFT_TOUCH threshold_selectors threshold_generators
@@ -184,7 +183,7 @@ program fci_zmq
     threshold_selectors = 1.d0
     threshold_generators = 1d0 
     SOFT_TOUCH threshold_selectors threshold_generators
-    call ZMQ_pt2(CI_energy, pt2,relative_error,absolute_error,error) ! Stochastic PT2
+    call ZMQ_pt2(CI_energy, pt2,relative_error,error) ! Stochastic PT2
     threshold_selectors = threshold_selectors_save
     threshold_generators = threshold_generators_save
     SOFT_TOUCH threshold_selectors threshold_generators

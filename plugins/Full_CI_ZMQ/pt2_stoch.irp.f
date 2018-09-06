@@ -17,7 +17,7 @@ subroutine run
   integer                        :: n_det_before, to_select
   double precision               :: threshold_davidson_in
 
-  double precision               :: E_CI_before, relative_error, absolute_error, eqt
+  double precision               :: E_CI_before, relative_error, eqt
 
   allocate (pt2(N_states))
   pt2(:) = 0.d0
@@ -26,9 +26,8 @@ subroutine run
   threshold_selectors = 1.d0
   threshold_generators = 1.d0 
   relative_error=PT2_relative_error
-  absolute_error=PT2_absolute_error
 
-  call ZMQ_pt2(E_CI_before, pt2, relative_error, absolute_error, eqt)
+  call ZMQ_pt2(E_CI_before, pt2, relative_error, eqt)
   print *,  'Final step'
   print *,  'N_det    = ', N_det
   print *,  'PT2      = ', pt2

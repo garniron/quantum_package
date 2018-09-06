@@ -186,7 +186,7 @@ subroutine run_dress_slave(thread,iproce,energy)
       
       tmp = 0d0
       do i=N_det,1,-1
-        tmp += psi_coef_sorted_gen(i, dress_stoch_istate)*breve_delta_m(dress_stoch_istate, i, 1)
+        tmp += psi_coef(i, dress_stoch_istate)*breve_delta_m(dress_stoch_istate, i, 1)
       end do
       !$OMP ATOMIC
       edI(i_generator) += tmp

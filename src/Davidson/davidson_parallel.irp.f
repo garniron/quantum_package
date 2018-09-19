@@ -82,11 +82,14 @@ subroutine davidson_slave_work(zmq_to_qp_run_socket, zmq_socket_push, N_st, sze,
   double precision, allocatable  :: energy(:)
 
   integer, external :: zmq_get_dvector
+  integer, external :: zmq_get_dmatrix
 
   allocate(u_t(N_st,N_det))
   allocate (energy(N_st))
 
-  if (zmq_get_dvector(zmq_to_qp_run_socket, worker_id, 'u_t', u_t, size(u_t)) == -1) then
+  ! Warning : dimensions are permuted for performance considerations, It is OK
+  ! since we get the full matrix
+  if (zmq_get_dmatrix(zmq_to_qp_run_socket, worker_id, 'u_t', u_t, size(u_t,2), size(u_t,1) ) == -1) then
     print *,  irp_here, ': Unable to get u_t'
     deallocate(u_t,energy)
     return
@@ -313,6 +316,7 @@ subroutine H_S2_u_0_nstates_zmq(v_0,s_0,u_0,N_st,sze)
   double precision :: energy(N_st)
 
   integer, external :: zmq_put_dvector, zmq_put_psi, zmq_put_N_states_diag
+  integer, external :: zmq_put_dmatrix
 
   energy = 0.d0
 
@@ -325,7 +329,9 @@ subroutine H_S2_u_0_nstates_zmq(v_0,s_0,u_0,N_st,sze)
   if (zmq_put_dvector(zmq_to_qp_run_socket,1,'energy',energy,size(energy)) == -1) then
     stop 'Unable to put energy on ZMQ server'
   endif
-  if (zmq_put_dvector(zmq_to_qp_run_socket, 1, 'u_t', u_t, size(u_t)) == -1) then
+  ! Warning : dimensions are permuted for performance considerations, It is OK
+  ! since we get the full matrix
+  if (zmq_put_dmatrix(zmq_to_qp_run_socket, 1, 'u_t', u_t, size(u_t,2),size(u_t,1) ) == -1) then
     stop 'Unable to put u_t on ZMQ server'
   endif
 

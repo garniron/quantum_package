@@ -36,6 +36,7 @@ subroutine run_wf
   double precision :: t0, t1
   
   integer, external              :: zmq_get_dvector, zmq_get_N_det_generators 
+  integer, external              :: zmq_get8_dvector
   integer, external              :: zmq_get_ivector
   integer, external              :: zmq_get_psi, zmq_get_N_det_selectors
   integer, external              :: zmq_get_N_states_diag

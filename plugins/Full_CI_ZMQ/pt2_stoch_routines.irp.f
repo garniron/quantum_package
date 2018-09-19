@@ -425,9 +425,6 @@ end function
   deallocate(seed)
 
   call RANDOM_NUMBER(pt2_u)
-  call RANDOM_NUMBER(pt2_u)
-  
-
   
   U = 0
   

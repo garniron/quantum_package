@@ -65,7 +65,7 @@ BEGIN_TEMPLATE
 
 subroutine broadcast_chunks_$double(A, LDA)
   implicit none
-  integer, intent(in)             :: LDA
+  integer*8, intent(in)             :: LDA
   $type, intent(inout) :: A(LDA)
   BEGIN_DOC
 ! Broadcast with chunks of ~2GB

@@ -76,7 +76,7 @@ BEGIN_PROVIDER [integer, max_degree_exc]
   enddo
 END_PROVIDER
 
-BEGIN_PROVIDER [ integer, psi_det_size ]
+BEGIN_PROVIDER [ integer*8, psi_det_size ]
   implicit none
   BEGIN_DOC
   ! Size of the psi_det/psi_coef arrays
@@ -88,9 +88,9 @@ BEGIN_PROVIDER [ integer, psi_det_size ]
     if (exists) then
       call ezfio_get_determinants_n_det(psi_det_size)
     else
-      psi_det_size = 1
+      psi_det_size = 1_8
     endif
-    psi_det_size = max(psi_det_size,100000)
+    psi_det_size = max(psi_det_size,100000_8)
     call write_int(6,psi_det_size,'Dimension of the psi arrays')
   endif
   IRP_IF MPI_DEBUG
@@ -100,7 +100,7 @@ BEGIN_PROVIDER [ integer, psi_det_size ]
   IRP_IF MPI
     include 'mpif.h'
     integer                        :: ierr
-    call MPI_BCAST( psi_det_size, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+    call MPI_BCAST( psi_det_size, 1, MPI_INTEGER8, 0, MPI_COMM_WORLD, ierr)
     if (ierr /= MPI_SUCCESS) then
       stop 'Unable to read psi_det_size with MPI'
     endif

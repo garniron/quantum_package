@@ -21,7 +21,7 @@ END_PROVIDER
 subroutine broadcast_chunks_bit_kind(A, LDA)
   use bitmasks
   implicit none
-  integer, intent(in)             :: LDA
+  integer*8, intent(in)             :: LDA
   integer(bit_kind), intent(inout) :: A(LDA)
   BEGIN_DOC
 ! Broadcast with chunks of ~2GB

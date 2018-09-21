@@ -13,6 +13,24 @@ end
 subroutine davidson_slave_tcp(i)
   implicit none
   integer, intent(in)            :: i
+  integer :: nproc_target
+  double precision :: r1
+  if (qp_max_mem > 0) then
+    nproc_target = nproc
+    r1 = 8.d0*(3.d0*dble(N_det*N_states_diag) & 
+      + nproc_target*(4.d0*N_det_alpha_unique+2.d0*N_states_diag*N_det))/(1024.d0**3)
+    do while (r1 > qp_max_mem)
+      nproc_target = nproc_target - 1
+      r1 = 8.d0*(3.d0*dble(N_det*N_states_diag) & 
+        + nproc_target*(4.d0*N_det_alpha_unique+2.d0*N_states_diag*N_det))/(1024.d0**3)
+      if (nproc_target == 0) then
+        nproc_target = 1
+        exit
+      endif
+    enddo
+    call omp_set_num_threads(nproc_target)
+    call write_int(6,nproc_target,'Number of threads for diagonalization')
+  endif
   call davidson_run_slave(0,i)
 end
 
@@ -75,7 +93,7 @@ subroutine davidson_slave_work(zmq_to_qp_run_socket, zmq_socket_push, N_st, sze,
   ! Get wave function (u_t)
   ! -----------------------
 
-  integer                        :: rc
+  integer                        :: rc, ni, nj
   integer*8                      :: rc8
   integer                        :: N_states_read, N_det_read, psi_det_size_read
   integer                        :: N_det_selectors_read, N_det_generators_read
@@ -87,9 +105,16 @@ subroutine davidson_slave_work(zmq_to_qp_run_socket, zmq_socket_push, N_st, sze,
   allocate(u_t(N_st,N_det))
   allocate (energy(N_st))
 
-  ! Warning : dimensions are permuted for performance considerations, It is OK
-  ! since we get the full matrix
-  if (zmq_get_dmatrix(zmq_to_qp_run_socket, worker_id, 'u_t', u_t, size(u_t,2), size(u_t,1) ) == -1) then
+  ! Warning : dimensions are modified for efficiency, It is OK since we get the
+  ! full matrix
+  if (size(u_t,kind=8) < 8388608_8) then
+    ni = size(u_t)
+    nj = 1
+  else
+    ni = 8388608
+    nj = size(u_t,kind=8)/8388608_8 + 1
+  endif
+  if (zmq_get_dmatrix(zmq_to_qp_run_socket, worker_id, 'u_t', u_t, ni, nj, size(u_t,kind=8)) == -1) then
     print *,  irp_here, ': Unable to get u_t'
     deallocate(u_t,energy)
     return
@@ -105,7 +130,7 @@ subroutine davidson_slave_work(zmq_to_qp_run_socket, zmq_socket_push, N_st, sze,
     include 'mpif.h'
     integer :: ierr
 
-    call broadcast_chunks_double(u_t,size(u_t))
+    call broadcast_chunks_double(u_t,size(u_t,kind=8))
     
   IRP_ENDIF
 
@@ -311,7 +336,7 @@ subroutine H_S2_u_0_nstates_zmq(v_0,s_0,u_0,N_st,sze)
   call new_parallel_job(zmq_to_qp_run_socket,zmq_socket_pull,'davidson')
   
   character*(512) :: task
-  integer :: rc
+  integer :: rc, ni, nj
   integer*8 :: rc8
   double precision :: energy(N_st)
 
@@ -329,9 +354,16 @@ subroutine H_S2_u_0_nstates_zmq(v_0,s_0,u_0,N_st,sze)
   if (zmq_put_dvector(zmq_to_qp_run_socket,1,'energy',energy,size(energy)) == -1) then
     stop 'Unable to put energy on ZMQ server'
   endif
-  ! Warning : dimensions are permuted for performance considerations, It is OK
-  ! since we get the full matrix
-  if (zmq_put_dmatrix(zmq_to_qp_run_socket, 1, 'u_t', u_t, size(u_t,2),size(u_t,1) ) == -1) then
+  if (size(u_t) < 8388608) then
+    ni = size(u_t)
+    nj = 1
+  else
+    ni = 8388608
+    nj = size(u_t)/8388608 + 1
+  endif
+  ! Warning : dimensions are modified for efficiency, It is OK since we get the
+  ! full matrix
+  if (zmq_put_dmatrix(zmq_to_qp_run_socket, 1, 'u_t', u_t, ni, nj, size(u_t,kind=8)) == -1) then
     stop 'Unable to put u_t on ZMQ server'
   endif
 

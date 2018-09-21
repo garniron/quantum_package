@@ -61,17 +61,18 @@ subroutine occ_pattern_to_dets(o,d,sze,n_alpha,Nint)
     amax -= popcnt( o(k,2) )
   enddo
 
-  nt = 0
-  ishift = 2
-  do i=1,Nint
-    l = o(i,1)
-    do while (l /= 0_bit_kind)
-      nt = nt+1
-      list_todo(nt) = ishift+popcnt(l-1_bit_kind) - popcnt(l)
-      l = iand(l,l-1_bit_kind)
-    enddo
-    ishift = ishift + bit_kind_size
-  enddo
+  call bitstring_to_list(o(1,1), list_todo, nt, Nint)
+!  nt = 0
+!  ishift = 2
+!  do i=1,Nint
+!    l = o(i,1)
+!    do while (l /= 0_bit_kind)
+!      nt = nt+1
+!      list_todo(nt) = ishift+popcnt(l-1_bit_kind) - popcnt(l)
+!      l = iand(l,l-1_bit_kind)
+!    enddo
+!    ishift = ishift + bit_kind_size
+!  enddo
 
   na = 0
   nd = 0

@@ -51,16 +51,27 @@ subroutine occ_pattern_to_dets(o,d,sze,n_alpha,Nint)
   integer(bit_kind),intent(in)   :: o(Nint,2)
   integer(bit_kind),intent(out)  :: d(Nint,2,sze)
   
-  integer                        :: i, k, nt, na, nd, amax
+  integer                        :: i, l, k, nt, na, nd, amax
   integer                        :: list_todo(2*n_alpha)
   integer                        :: list_a(2*n_alpha)
+  integer                        :: ishift
 
   amax = n_alpha
   do k=1,Nint
     amax -= popcnt( o(k,2) )
   enddo
 
-  call bitstring_to_list(o(1,1), list_todo, nt, Nint)
+  nt = 0
+  ishift = 2
+  do i=1,Nint
+    l = o(i,1)
+    do while (l /= 0_bit_kind)
+      nt = nt+1
+      list_todo(nt) = ishift+popcnt(l-1_bit_kind) - popcnt(l)
+      l = iand(l,l-1_bit_kind)
+    enddo
+    ishift = ishift + bit_kind_size
+  enddo
 
   na = 0
   nd = 0
@@ -69,7 +80,7 @@ subroutine occ_pattern_to_dets(o,d,sze,n_alpha,Nint)
 
   sze = nd
   
-  integer :: ne(2), l
+  integer :: ne(2)
   l=0
   do i=1,nd
     ne(1) = 0
@@ -90,6 +101,7 @@ subroutine occ_pattern_to_dets(o,d,sze,n_alpha,Nint)
 
 end
 
+
 recursive subroutine  rec_occ_pattern_to_dets(list_todo,nt,list_a,na,d,nd,sze,amax,Nint)
   use bitmasks
   implicit none
@@ -98,6 +110,7 @@ recursive subroutine  rec_occ_pattern_to_dets(list_todo,nt,list_a,na,d,nd,sze,am
   integer,intent(inout)          :: list_todo(nt)
   integer, intent(inout)         :: list_a(na+1),nd
   integer(bit_kind),intent(inout) :: d(Nint,2,sze)
+  integer :: iint, ipos, i,j,k
 
   if (na == amax) then
     nd += 1
@@ -106,14 +119,17 @@ recursive subroutine  rec_occ_pattern_to_dets(list_todo,nt,list_a,na,d,nd,sze,am
       print *,  irp_here, ': sze = ', sze
       stop 'bug in rec_occ_pattern_to_dets'
     endif
-    if (na > 0) then
-      call list_to_bitstring( d(1,1,nd), list_a, na, Nint)
-    endif
-    if (nt > 0) then
-      call list_to_bitstring( d(1,2,nd), list_todo, nt, Nint)
-    endif
+    do i=1,na
+      iint = ishft(list_a(i)-1,-bit_kind_shift) + 1
+      ipos = list_a(i)-ishft((iint-1),bit_kind_shift)-1
+      d(iint,1,nd) = ibset( d(iint,1,nd), ipos )
+    enddo
+    do i=1,nt
+      iint = ishft(list_todo(i)-1,-bit_kind_shift) + 1
+      ipos = list_todo(i)-ishft((iint-1),bit_kind_shift)-1
+      d(iint,2,nd) = ibset( d(iint,2,nd), ipos )
+    enddo
   else
-    integer :: i, j, k
     integer, allocatable :: list_todo_tmp(:)
     allocate (list_todo_tmp(nt))
     do i=1,nt
@@ -317,7 +333,7 @@ subroutine make_s2_eigenfunction
   smax = s
   ithread=0
   !$ ithread = omp_get_thread_num()
-  !$OMP DO 
+  !$OMP DO SCHEDULE (dynamic,1000)
   do i=1,N_occ_pattern
     call occ_pattern_to_dets_size(psi_occ_pattern(1,1,i),s,elec_alpha_num,N_int)
     s += 1
@@ -330,10 +346,7 @@ subroutine make_s2_eigenfunction
     do j=1,s
       if (.not. is_in_wavefunction(d(1,1,j), N_int) ) then
         N_det_new += 1
-        do k=1,N_int
-          det_buffer(k,1,N_det_new) = d(k,1,j)
-          det_buffer(k,2,N_det_new) = d(k,2,j)
-        enddo
+        det_buffer(:,:,N_det_new) = d(:,:,j)
         if (N_det_new == bufsze) then
           call fill_H_apply_buffer_no_selection(bufsze,det_buffer,N_int,ithread)
           N_det_new = 0

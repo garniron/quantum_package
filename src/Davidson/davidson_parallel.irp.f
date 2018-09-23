@@ -13,24 +13,6 @@ end
 subroutine davidson_slave_tcp(i)
   implicit none
   integer, intent(in)            :: i
-  integer :: nproc_target
-  double precision :: r1
-  if (qp_max_mem > 0) then
-    nproc_target = nproc
-    r1 = 8.d0*(3.d0*dble(N_det*N_states_diag) & 
-      + nproc_target*(4.d0*N_det_alpha_unique+2.d0*N_states_diag*N_det))/(1024.d0**3)
-    do while (r1 > qp_max_mem)
-      nproc_target = nproc_target - 1
-      r1 = 8.d0*(3.d0*dble(N_det*N_states_diag) & 
-        + nproc_target*(4.d0*N_det_alpha_unique+2.d0*N_states_diag*N_det))/(1024.d0**3)
-      if (nproc_target == 0) then
-        nproc_target = 1
-        exit
-      endif
-    enddo
-    call omp_set_num_threads(nproc_target)
-    call write_int(6,nproc_target,'Number of threads for diagonalization')
-  endif
   call davidson_run_slave(0,i)
 end
 

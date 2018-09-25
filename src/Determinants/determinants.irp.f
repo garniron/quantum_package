@@ -536,7 +536,7 @@ subroutine save_wavefunction_general(ndet,nstates,psidet,dim_psicoef,psicoef)
     call ezfio_set_determinants_mo_label(mo_label)
     
     allocate (psi_det_save(N_int,2,ndet))
-    !$OMP PARALLEL DO DEFAULT(NONE) PRIVATE(i,j,k) SHARED(psi_det_save,psidet,ndet,N_int)
+    !$OMP PARALLEL DO DEFAULT(NONE) PRIVATE(i,j,k) SHARED(psi_det_save,psidet,ndet,N_int,accu_norm)
     do i=1,ndet
       do j=1,2
         do k=1,N_int

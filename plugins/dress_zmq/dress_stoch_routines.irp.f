@@ -284,7 +284,7 @@ subroutine ZMQ_dress(E, dress, delta_out, delta_s2_out, relative_error)
     if (zmq_put_dvector(zmq_to_qp_run_socket,1,"state_average_weight",state_average_weight,N_states) == -1) then
       stop 'Unable to put state_average_weight on ZMQ server'
     endif
-    if (zmq_put_int(zmq_to_qp_run_socket,1,"dress_stoch_istate",dress_stoch_istate) == -1) then
+    if (zmq_put_int(zmq_to_qp_run_socket,1,'dress_stoch_istate',dress_stoch_istate) == -1) then
       stop 'Unable to put dress_stoch_istate on ZMQ server'
     endif
       if (zmq_put_dvector(zmq_to_qp_run_socket,1,'threshold_selectors',threshold_selectors,1) == -1) then
@@ -483,9 +483,9 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
   integer, external :: zmq_delete_tasks, dress_find_sample
   logical :: found
   integer :: worker_id
+  worker_id=1
   zmq_to_qp_run_socket = new_zmq_to_qp_run_socket()
 
-  call connect_to_taskserver(zmq_to_qp_run_socket,worker_id,1)
   
   found = .false.
   delta = 0d0
@@ -542,7 +542,7 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
       if(dabs(error / avg) <= relative_error) then
         integer, external :: zmq_put_dvector
         integer, external :: zmq_put_int
-        i= zmq_put_int(zmq_to_qp_run_socket, worker_id, "ending", (m-1))
+        i= zmq_put_int(zmq_to_qp_run_socket, worker_id, 'ending', (m-1))
         found = .true.
       end if
     else
@@ -607,7 +607,6 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
   !end do
   !print *, "SUM", E(1)+sum(edi(:))
   !print *, "DOT", E(1)+tmp
-  call disconnect_from_taskserver(zmq_to_qp_run_socket,worker_id)
   call end_zmq_to_qp_run_socket(zmq_to_qp_run_socket)
 end subroutine
 

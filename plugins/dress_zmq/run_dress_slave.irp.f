@@ -62,6 +62,7 @@ subroutine run_dress_slave(thread,iproce,energy)
   cp_done = 0
   cp_sent = 0
   will_send = 0
+  cp_max(:) = 0
 
   double precision :: hij, sij, tmp
   purge_task_id = 0
@@ -76,7 +77,11 @@ subroutine run_dress_slave(thread,iproce,energy)
   !$OMP PRIVATE(task_buf, ntask_buf,time, time0)
   zmq_to_qp_run_socket = new_zmq_to_qp_run_socket()
   zmq_socket_push      = new_zmq_push_socket(thread)
-  call connect_to_taskserver(zmq_to_qp_run_socket,worker_id,thread)
+  integer, external :: connect_to_taskserver
+  if (connect_to_taskserver(zmq_to_qp_run_socket,worker_id,thread) == -1) then
+    print *,  irp_here, ': Unable to connect to task server'
+    stop -1
+  endif
   if(worker_id == -1) then
     call end_zmq_to_qp_run_socket(zmq_to_qp_run_socket)
     call end_zmq_push_socket(zmq_socket_push,thread)
@@ -91,8 +96,8 @@ subroutine run_dress_slave(thread,iproce,energy)
     call push_dress_results(zmq_socket_push, 0, 0, edI_task, edI_index, breve_delta_m, task_buf, ntask_buf)
   end if
 
-  cp_max(:) = 0
-  do while(cp_done > cp_sent .or. m /= dress_N_cp+1)
+  !$OMP FLUSH
+  do while( (cp_done > cp_sent) .or. (m /= dress_N_cp+1) )
     !$OMP CRITICAL (send)
     if(ntask_tbd == 0) then
       ntask_tbd = size(task_tbd)
@@ -233,7 +238,12 @@ subroutine run_dress_slave(thread,iproce,energy)
     end if
    
   !$OMP END SINGLE
-  call disconnect_from_taskserver(zmq_to_qp_run_socket,worker_id)
+
+  integer, external :: disconnect_from_taskserver
+  if (disconnect_from_taskserver(zmq_to_qp_run_socket,worker_id) == -1) then
+    print *,  irp_here, ': Unable to disconnect from task server'
+    stop -1
+  endif
   call end_zmq_to_qp_run_socket(zmq_to_qp_run_socket)
   call end_zmq_push_socket(zmq_socket_push,thread)
   !$OMP END PARALLEL

@@ -16,8 +16,8 @@ program print_mos
  call write_Mo_basis(i_unit_output)
  
 
- write(i_unit_output,*),''
- write(i_unit_output,*),''
+ write(i_unit_output,*)''
+ write(i_unit_output,*)''
  write(i_unit_output,*)'          ------------------------'
 
  close(i_unit_output)

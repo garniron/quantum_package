@@ -11,8 +11,8 @@ integer function zmq_put_psi(zmq_to_qp_run_socket,worker_id)
   integer, external              :: zmq_put_N_states
   integer, external              :: zmq_put_N_det
   integer, external              :: zmq_put_psi_det_size
-  integer, external              :: zmq_put_psi_det
-  integer, external              :: zmq_put_psi_coef
+  integer*8, external            :: zmq_put_psi_det
+  integer*8, external            :: zmq_put_psi_coef
 
   zmq_put_psi = 0
   if (zmq_put_N_states(zmq_to_qp_run_socket, worker_id) == -1) then

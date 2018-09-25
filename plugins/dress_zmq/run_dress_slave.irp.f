@@ -148,7 +148,7 @@ subroutine run_dress_slave(thread,iproce,energy)
         end if
       end do
       call push_dress_results(zmq_socket_push, will_send, sum_f, edI_task, edI_index, &
-        breve_delta_m, 0, n_tasks)
+        breve_delta_m, task_buf, n_tasks)
     end if
     !$OMP END CRITICAL (send)
     
@@ -234,7 +234,8 @@ subroutine run_dress_slave(thread,iproce,energy)
       do i=1,N_det_generators
         if(dress_P(i) <= will_send) sum_f = sum_f + f(i)
       end do
-      call push_dress_results(zmq_socket_push, -will_send, sum_f, edI_task, edI_index, breve_delta_m, purge_task_id, 1)
+      task_buf(1) = purge_task_id
+      call push_dress_results(zmq_socket_push, -will_send, sum_f, edI_task, edI_index, breve_delta_m, task_buf, 1)
     end if
    
   !$OMP END SINGLE

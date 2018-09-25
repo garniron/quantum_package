@@ -124,7 +124,6 @@ subroutine davidson_slave_work(zmq_to_qp_run_socket, zmq_socket_push, N_st, sze,
   do
     integer, external :: get_task_from_taskserver
     integer, external :: task_done_to_taskserver
-    call sleep(1)
     if (get_task_from_taskserver(zmq_to_qp_run_socket,worker_id, task_id, msg) == -1) then
       exit
     endif
@@ -356,14 +355,13 @@ subroutine H_S2_u_0_nstates_zmq(v_0,s_0,u_0,N_st,sze)
   ! ============
 
   integer :: istep, imin, imax, ishift
-  double precision :: w, max_workload, N_det_inv, di
+  double precision :: w, max_workload, N_det_inv
   integer, external :: add_task_to_taskserver
   w = 0.d0
   istep=1
   ishift=0
   imin=1
   N_det_inv = 1.d0/dble(N_det)
-  di = dble(N_det)
   max_workload = 50000.d0
   do imax=1,N_det
     w = w + 1.d0

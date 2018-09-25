@@ -224,7 +224,7 @@ integer function zmq_put8_dvector(zmq_to_qp_run_socket, worker_id, name, x, size
 
   rc = f77_zmq_send8(zmq_to_qp_run_socket,x,size_x*8_8,0)
   if (rc /= size_x*8_8) then
-    print *,  'Failed in send ', rc, size_x*8, size_x, N_det
+    print *,  'Failed in send ', rc, size_x*8, size_x
     zmq_put8_dvector = -1
     return
   endif

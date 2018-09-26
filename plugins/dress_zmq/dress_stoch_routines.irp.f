@@ -516,7 +516,6 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
   more = 1
 
   do while (.not. found)
-print *, 'm, dotfm',  m, dot_f(m)      
     if(dot_f(m) == 0) then
       E0 = 0
       do i=dress_dot_n_0(m),1,-1
@@ -534,7 +533,6 @@ print *, 'm, dotfm',  m, dot_f(m)
         end do
       end do
       t = dress_dot_t(m)
-!print *, 'm dressncp', m, dress_N_cp
       avg = E0 + S(t) / dble(c)
       if (c > 2) then
         eqt = dabs((S2(t) / c) - (S(t)/c)**2)

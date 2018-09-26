@@ -36,7 +36,7 @@ subroutine run_dress_slave(thread,iproce,energy)
 !  integer(kind=OMP_LOCK_KIND) :: lck_det(0:pt2_N_teeth+1)
 !  integer(kind=OMP_LOCK_KIND) :: lck_sto(dress_N_cp)
   double precision :: fac
-  integer :: ending
+  integer :: ending, ending_tmp
   integer, external :: zmq_get_dvector, zmq_get_int
 ! double precision, external :: omp_get_wtime
   double precision :: time, time0
@@ -96,7 +96,8 @@ subroutine run_dress_slave(thread,iproce,energy)
     call push_dress_results(zmq_socket_push, 0, 0, edI_task, edI_index, breve_delta_m, task_buf, ntask_buf)
   end if
 
-  !$OMP FLUSH
+  m=0
+  !$OMP BARRIER
   do while( (cp_done > cp_sent) .or. (m /= dress_N_cp+1) )
     !$OMP CRITICAL (send)
     if(ntask_tbd == 0) then
@@ -116,13 +117,13 @@ subroutine run_dress_slave(thread,iproce,energy)
       ntask_tbd -= 1
     else
       m = dress_N_cp + 1
-      i= zmq_get_int(zmq_to_qp_run_socket, worker_id, "ending", ending)
+      if (zmq_get_int(zmq_to_qp_run_socket, worker_id, "ending", ending_tmp) /= -1) then
+        ending = ending_tmp
+      endif
     end if
     will_send = 0
     
     cp_max(iproc) = m
-!    print *,  cp_max(:)
-!    print *,  ''
     cp_done = minval(cp_max)-1
     if(cp_done > cp_sent) then
       will_send = cp_sent + 1
@@ -147,6 +148,7 @@ subroutine run_dress_slave(thread,iproce,energy)
           edI_index(n_tasks) = i
         end if
       end do
+write(0,*) 'will send', will_send, n_tasks
       call push_dress_results(zmq_socket_push, will_send, sum_f, edI_task, edI_index, &
         breve_delta_m, task_buf, n_tasks)
     end if
@@ -160,7 +162,6 @@ subroutine run_dress_slave(thread,iproce,energy)
       time0 = omp_get_wtime()
       call alpha_callback(breve_delta_m, i_generator, subset, pt2_F(i_generator), iproc)
       time = omp_get_wtime()
-!print '(I0.11, I4, A12, F12.3)', i_generator, subset, "GREPMETIME", time-time0
       t = dress_T(i_generator)
     
       !$OMP CRITICAL(t_crit)
@@ -200,7 +201,6 @@ subroutine run_dress_slave(thread,iproce,energy)
         ntask_buf = 0
       end if
     end if
-    !$OMP FLUSH
   end do
 
   !$OMP BARRIER
@@ -208,11 +208,11 @@ subroutine run_dress_slave(thread,iproce,energy)
      call push_dress_results(zmq_socket_push, 0, 0, edI_task, edI_index, breve_delta_m, task_buf, ntask_buf)
      ntask_buf = 0
    end if
-    !$OMP SINGLE
-    if(purge_task_id /= 0) then
-      do while(ending == dress_N_cp+1)
+
+   !$OMP SINGLE
+   if(purge_task_id /= 0) then
+      do while (zmq_get_int(zmq_to_qp_run_socket, worker_id, "ending", ending) == -1)
         call sleep(1)
-        i= zmq_get_int(zmq_to_qp_run_socket, worker_id, "ending", ending)
       end do
 
       will_send = ending

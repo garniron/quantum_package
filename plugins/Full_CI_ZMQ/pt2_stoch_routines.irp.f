@@ -15,8 +15,7 @@ END_PROVIDER
   integer :: i
   integer :: e
   e = elec_num - n_core_orb * 2
-  pt2_n_tasks_max = 1+min((e*(e-1))/2, int(dsqrt(dble(N_det_generators)))/10)
-  pt2_n_tasks_max = 1
+  pt2_n_tasks_max = 1+min((e*(e-1))/2, int(dsqrt(dble(N_det_selectors)))/10)
   do i=1,N_det_generators
     if (maxval(dabs(psi_coef_sorted_gen(i,1:N_states))) > 0.001d0) then
       pt2_F(i) = pt2_n_tasks_max

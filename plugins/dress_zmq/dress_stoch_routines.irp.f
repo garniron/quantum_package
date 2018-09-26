@@ -30,7 +30,7 @@ END_PROVIDER
     pt2_N_teeth = 1
   else
     pt2_minDetInFirstTeeth = min(5, N_det_generators)
-    do pt2_N_teeth=20,2,-1
+    do pt2_N_teeth=100,2,-1
       if(testTeethBuilding(pt2_minDetInFirstTeeth, pt2_N_teeth)) exit
     end do
   end if
@@ -89,7 +89,7 @@ logical function testTeethBuilding(minF, N)
 end function
 
 BEGIN_PROVIDER[ integer, dress_N_cp_max ]
-  dress_N_cp_max = 64
+  dress_N_cp_max = 28
 END_PROVIDER
 
  BEGIN_PROVIDER[integer, pt2_J, (N_det_generators)]
@@ -102,6 +102,7 @@ END_PROVIDER
 
   pt2_J = pt2_J_
   dress_R1 = dress_R1_
+!return
 
   do m=1,dress_N_cp
     nmov = 0
@@ -209,6 +210,11 @@ END_PROVIDER
   enddo
   
   dress_N_cp = m-1
+  if (dress_N_cp == 0) then                   
+    print *, irp_here, 'dress_N_cp = 0'       
+    stop -1                                   
+  endif                                       
+
   dress_R1_(dress_N_cp) = N_j
   dress_M_m(dress_N_cp) = N_c
   !!!!!!!!!!!!!!
@@ -510,6 +516,7 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
   more = 1
 
   do while (.not. found)
+print *, 'm, dotfm',  m, dot_f(m)      
     if(dot_f(m) == 0) then
       E0 = 0
       do i=dress_dot_n_0(m),1,-1
@@ -527,16 +534,17 @@ subroutine dress_collector(zmq_socket_pull, E, relative_error, delta, delta_s2, 
         end do
       end do
       t = dress_dot_t(m)
+!print *, 'm dressncp', m, dress_N_cp
       avg = E0 + S(t) / dble(c)
       if (c > 2) then
         eqt = dabs((S2(t) / c) - (S(t)/c)**2)
-        eqt = sqrt(eqt / (dble(c)-1.5d0))
-        error = eqt
+        error = sqrt(eqt / (dble(c)-1.5d0))
         time = omp_get_wtime()
-        print '(G10.3, 2X, F16.10, 2X, G16.3, 2X, F16.4, A20)', c, avg+E(istate), eqt, time-time0, ''
+        print '(G10.3, 2X, F16.10, 2X, G16.3, 2X, F16.4, A20)', c, avg+E(istate), error, time-time0, ''
+      else if ( m==dress_N_cp ) then
+        error = 0.d0
       else
-        eqt = 1.d0
-        error = eqt
+        error =1.d0
       endif
       m += 1
       if(dabs(error / avg) <= relative_error) then

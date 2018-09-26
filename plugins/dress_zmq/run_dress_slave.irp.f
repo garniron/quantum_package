@@ -148,7 +148,6 @@ subroutine run_dress_slave(thread,iproce,energy)
           edI_index(n_tasks) = i
         end if
       end do
-write(0,*) 'will send', will_send, n_tasks
       call push_dress_results(zmq_socket_push, will_send, sum_f, edI_task, edI_index, &
         breve_delta_m, task_buf, n_tasks)
     end if

@@ -211,8 +211,7 @@ END_PROVIDER
   
   dress_N_cp = m-1
   if (dress_N_cp == 0) then                   
-    print *, irp_here, 'dress_N_cp = 0'       
-    stop -1                                   
+    dress_N_cp = 1
   endif                                       
 
   dress_R1_(dress_N_cp) = N_j

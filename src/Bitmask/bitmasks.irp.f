@@ -127,6 +127,10 @@ BEGIN_PROVIDER [ integer, N_generators_bitmask ]
   ASSERT (N_generators_bitmask > 0)
   call write_int(6,N_generators_bitmask,'N_generators_bitmask')
  endif
+  IRP_IF MPI_DEBUG
+    print *,  irp_here, mpi_rank
+    call MPI_BARRIER(MPI_COMM_WORLD, ierr)
+  IRP_ENDIF
   IRP_IF MPI
     include 'mpif.h'
     integer :: ierr
@@ -170,6 +174,10 @@ BEGIN_PROVIDER [ integer, N_generators_bitmask_restart ]
   ASSERT (N_generators_bitmask_restart > 0)
   call write_int(6,N_generators_bitmask_restart,'N_generators_bitmask_restart')
  endif
+  IRP_IF MPI_DEBUG
+    print *,  irp_here, mpi_rank
+    call MPI_BARRIER(MPI_COMM_WORLD, ierr)
+  IRP_ENDIF
  IRP_IF MPI
     include 'mpif.h'
     integer :: ierr
@@ -244,6 +252,10 @@ BEGIN_PROVIDER [ integer(bit_kind), generators_bitmask_restart, (N_int,2,6,N_gen
     enddo
   enddo
  endif
+  IRP_IF MPI_DEBUG
+    print *,  irp_here, mpi_rank
+    call MPI_BARRIER(MPI_COMM_WORLD, ierr)
+  IRP_ENDIF
   IRP_IF MPI
     include 'mpif.h'
     integer :: ierr
@@ -313,6 +325,10 @@ if (mpi_master) then
    enddo
  enddo
  endif
+  IRP_IF MPI_DEBUG
+    print *,  irp_here, mpi_rank
+    call MPI_BARRIER(MPI_COMM_WORLD, ierr)
+  IRP_ENDIF
   IRP_IF MPI
     include 'mpif.h'
     integer :: ierr
@@ -354,6 +370,10 @@ BEGIN_PROVIDER [ integer, N_cas_bitmask ]
   call write_int(6,N_cas_bitmask,'N_cas_bitmask')
  endif
  ASSERT (N_cas_bitmask > 0)
+  IRP_IF MPI_DEBUG
+    print *,  irp_here, mpi_rank
+    call MPI_BARRIER(MPI_COMM_WORLD, ierr)
+  IRP_ENDIF
   IRP_IF MPI
     include 'mpif.h'
     integer :: ierr
@@ -407,6 +427,10 @@ BEGIN_PROVIDER [ integer(bit_kind), cas_bitmask, (N_int,2,N_cas_bitmask) ]
   enddo
   write(*,*) 'Read CAS bitmask'
  endif
+  IRP_IF MPI_DEBUG
+    print *,  irp_here, mpi_rank
+    call MPI_BARRIER(MPI_COMM_WORLD, ierr)
+  IRP_ENDIF
   IRP_IF MPI
     include 'mpif.h'
     integer :: ierr

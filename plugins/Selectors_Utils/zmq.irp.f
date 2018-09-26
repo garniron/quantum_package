@@ -72,6 +72,10 @@ integer function zmq_get_$X(zmq_to_qp_run_socket, worker_id)
 
   10 continue
 
+  IRP_IF MPI_DEBUG
+    print *,  irp_here, mpi_rank
+    call MPI_BARRIER(MPI_COMM_WORLD, ierr)
+  IRP_ENDIF
   IRP_IF MPI
     include 'mpif.h'
     integer :: ierr

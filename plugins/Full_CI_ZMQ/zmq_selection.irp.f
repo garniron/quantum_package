@@ -12,15 +12,13 @@ subroutine ZMQ_selection(N_in, pt2)
   double precision, intent(out)  :: pt2(N_states)
   
   
-  PROVIDE fragment_count
-
   N = max(N_in,1)
   if (.True.) then
     PROVIDE pt2_e0_denominator nproc
     PROVIDE psi_bilinear_matrix_columns_loc psi_det_alpha_unique psi_det_beta_unique
     PROVIDE psi_bilinear_matrix_rows psi_det_sorted_order psi_bilinear_matrix_order
     PROVIDE psi_bilinear_matrix_transp_rows_loc psi_bilinear_matrix_transp_columns
-    PROVIDE psi_bilinear_matrix_transp_order fragment_count
+    PROVIDE psi_bilinear_matrix_transp_order 
 
     call new_parallel_job(zmq_to_qp_run_socket,zmq_socket_pull,'selection')
 
@@ -54,34 +52,22 @@ subroutine ZMQ_selection(N_in, pt2)
   endif
 
   integer, external :: add_task_to_taskserver
-  character(len=64000)           :: task
+  character(len=100000)           :: task
   integer :: j,k,ipos
   ipos=1
   task = ' ' 
 
-  do i= 1, N_det_generators
-!    /!\ Fragments don't work
-!    if (i>-ishft(N_det_generators,-2)) then
-      write(task(ipos:ipos+30),'(I9,1X,I9,1X,I9,''|'')') 0, i, N
+ do i= 1, N_det_generators
+    do j=1,pt2_F(pt2_J(i))
+      write(task(ipos:ipos+30),'(I9,1X,I9,1X,I9,''|'')') j, pt2_J(i), N
       ipos += 30
-      if (ipos > 63970) then
+      if (ipos > 100000-30) then
         if (add_task_to_taskserver(zmq_to_qp_run_socket,trim(task(1:ipos))) == -1) then
           stop 'Unable to add task to task server'
         endif
         ipos=1
       endif
-!    else
-!      do j=1,fragment_count
-!        write(task(ipos:ipos+30),'(I9,1X,I9,1X,I9,''|'')') j, i, N
-!        ipos += 30
-!        if (ipos > 63970) then
-!          if (add_task_to_taskserver(zmq_to_qp_run_socket,trim(task(1:ipos))) == -1) then
-!            stop 'Unable to add task to task server'
-!          endif
-!          ipos=1
-!        endif
-!      end do
-!    endif
+    end do
   enddo
   if (ipos > 1) then
     if (add_task_to_taskserver(zmq_to_qp_run_socket,trim(task(1:ipos))) == -1) then

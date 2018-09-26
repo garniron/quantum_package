@@ -10,3 +10,9 @@ doc: Maximum number of dressed CI iterations
 interface: ezfio,provider,ocaml
 default: 10
 
+[dress_relative_error]
+type: Normalized_float
+doc: Stop stochastic PT2 when the relative error is smaller than PT2_relative_error
+interface: ezfio,provider,ocaml
+default: 0.001
+

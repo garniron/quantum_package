@@ -54,6 +54,10 @@ BEGIN_PROVIDER [ double precision, nucl_coord,  (nucl_num,3) ]
      
    endif
    
+  IRP_IF MPI_DEBUG
+    print *,  irp_here, mpi_rank
+    call MPI_BARRIER(MPI_COMM_WORLD, ierr)
+  IRP_ENDIF
    IRP_IF MPI
      include 'mpif.h'
      integer                        :: ierr
@@ -159,6 +163,10 @@ BEGIN_PROVIDER [ double precision, nuclear_repulsion ]
        endif
        print*, 'Read nuclear_repulsion'
      endif
+  IRP_IF MPI_DEBUG
+    print *,  irp_here, mpi_rank
+    call MPI_BARRIER(MPI_COMM_WORLD, ierr)
+  IRP_ENDIF
      IRP_IF MPI
       include 'mpif.h'
       integer                        :: ierr
@@ -228,6 +236,10 @@ END_PROVIDER
    close(10)
  endif
 
+ IRP_IF MPI_DEBUG
+   print *,  irp_here, mpi_rank
+   call MPI_BARRIER(MPI_COMM_WORLD, ierr)
+ IRP_ENDIF
  IRP_IF MPI
   include 'mpif.h'
   integer                        :: ierr

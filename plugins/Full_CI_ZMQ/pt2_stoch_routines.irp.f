@@ -6,27 +6,34 @@ BEGIN_PROVIDER [ integer, pt2_stoch_istate ]
  pt2_stoch_istate = 1
 END_PROVIDER
 
-
  BEGIN_PROVIDER [ integer, pt2_N_teeth ]
 &BEGIN_PROVIDER [ integer, pt2_minDetInFirstTeeth ]
 &BEGIN_PROVIDER [ integer, pt2_n_tasks_max ]
 &BEGIN_PROVIDER [ integer, pt2_F, (N_det_generators) ]
   implicit none
   logical, external :: testTeethBuilding
-  pt2_F(:) = 1
-  !pt2_F(:N_det_generators/1000*0+50) = 1
-  pt2_n_tasks_max = 16 ! N_det_generators/100 + 1
+  integer :: i
+  integer :: e
+  e = elec_num - n_core_orb * 2
+  pt2_n_tasks_max = 1+min((e*(e-1))/2, int(dsqrt(dble(N_det_selectors)))/10)
+  do i=1,N_det_generators
+    if (maxval(dabs(psi_coef_sorted_gen(i,1:N_states))) > 0.001d0) then
+      pt2_F(i) = pt2_n_tasks_max
+    else
+      pt2_F(i) = 1
+    endif
+  enddo
   
   if(N_det_generators < 1024) then
     pt2_minDetInFirstTeeth = 1
     pt2_N_teeth = 1
   else
-    do pt2_N_teeth=32,1,-1
-      pt2_minDetInFirstTeeth = min(5, N_det_generators)
+    pt2_minDetInFirstTeeth = min(5, N_det_generators)
+    do pt2_N_teeth=100,2,-1
       if(testTeethBuilding(pt2_minDetInFirstTeeth, pt2_N_teeth)) exit
     end do
   end if
-  print *, pt2_N_teeth
+  call write_int(6,pt2_N_teeth,'Number of comb teeth')
 END_PROVIDER
 
 
@@ -41,25 +48,39 @@ logical function testTeethBuilding(minF, N)
 
   allocate(tilde_w(N_det_generators), tilde_cW(0:N_det_generators))
   
-  tilde_cW(0) = 0d0
   do i=1,N_det_generators
-    tilde_w(i)  = psi_coef_generators(i,pt2_stoch_istate)**2
+    tilde_w(i)  = psi_coef_sorted_gen(i,pt2_stoch_istate)**2 !+ 1.d-20
+  enddo
+
+  double precision :: norm
+  norm = 0.d0
+  do i=N_det_generators,1,-1
+    norm += tilde_w(i) 
+  enddo
+
+  tilde_w(:) = tilde_w(:) / norm
+
+  tilde_cW(0) = -1.d0
+  do i=1,N_det_generators
     tilde_cW(i) = tilde_cW(i-1) + tilde_w(i)
   enddo
-  tilde_cW(N_det_generators) = 1d0
- 
+  tilde_cW(:) = tilde_cW(:) + 1.d0
+
   n0 = 0
+  testTeethBuilding = .false.
   do
     u0 = tilde_cW(n0)
     r = tilde_cW(n0 + minF)
     Wt = (1d0 - u0) / dble(N)
+    if (dabs(Wt) <= 1.d-3) then
+      return
+    endif
     if(Wt >= r - u0) then
        testTeethBuilding = .true.
        return
     end if
     n0 += 1
     if(N_det_generators - n0 < minF * N) then
-      testTeethBuilding = .false.
       return
     end if
   end do
@@ -68,20 +89,19 @@ end function
 
 
 
-subroutine ZMQ_pt2(E, pt2,relative_error, absolute_error, error)
+subroutine ZMQ_pt2(E, pt2,relative_error, error)
   use f77_zmq
   use selection_types
   
   implicit none
   
-  character(len=64000)           :: task
   integer(ZMQ_PTR)               :: zmq_to_qp_run_socket, zmq_socket_pull
   integer, external              :: omp_get_thread_num
-  double precision, intent(in)   :: relative_error, absolute_error, E(N_states)
+  double precision, intent(in)   :: relative_error, E(N_states)
   double precision, intent(out)  :: pt2(N_states),error(N_states)
   
   
-  integer                        :: i, j, k
+  integer                        :: i
   
   double precision, external     :: omp_get_wtime
   double precision               :: state_average_weight_save(N_states), w(N_states)
@@ -138,17 +158,39 @@ subroutine ZMQ_pt2(E, pt2,relative_error, absolute_error, error)
       endif
 
 
+
       integer, external :: add_task_to_taskserver
-      
-      
+      character(100000) :: task
+
+      integer :: j,k,ipos
+
+      ipos=0
       do i=1,N_det_generators
-        do j=1,pt2_F(i) !!!!!!!!!!!! 
-          write(task(1:20),'(I9,1X,I9''|'')') j, pt2_J(i)
-          if (add_task_to_taskserver(zmq_to_qp_run_socket,trim(task(1:20))) == -1) then
-            stop 'Unable to add task to task server'
+        if (pt2_F(i) > 1) then
+          ipos += 1
+        endif
+      enddo
+      call write_int(6,ipos,'Number of fragmented tasks')
+
+      ipos=1
+
+      do i= 1, N_det_generators
+        do j=1,pt2_F(pt2_J(i))
+          write(task(ipos:ipos+20),'(I9,1X,I9,''|'')') j, pt2_J(i)
+          ipos += 20
+          if (ipos > 100000-20) then
+            if (add_task_to_taskserver(zmq_to_qp_run_socket,trim(task(1:ipos))) == -1) then
+              stop 'Unable to add task to task server'
+            endif
+            ipos=1
           endif
         end do
-      end do
+      enddo
+      if (ipos > 1) then
+        if (add_task_to_taskserver(zmq_to_qp_run_socket,trim(task(1:ipos))) == -1) then
+          stop 'Unable to add task to task server'
+        endif
+      endif
       
       integer, external :: zmq_set_running
       if (zmq_set_running(zmq_to_qp_run_socket) == -1) then
@@ -166,11 +208,13 @@ subroutine ZMQ_pt2(E, pt2,relative_error, absolute_error, error)
         nproc_target = min(nproc_target,nproc)
       endif
 
+      call omp_set_nested(.true.)
+
       !$OMP PARALLEL DEFAULT(shared) NUM_THREADS(nproc_target+1)            &
           !$OMP  PRIVATE(i)
       i = omp_get_thread_num()
       if (i==0) then
-        call pt2_collector(zmq_socket_pull, E(pt2_stoch_istate),relative_error, absolute_error, w, error)
+        call pt2_collector(zmq_socket_pull, E(pt2_stoch_istate),relative_error, w, error)
         pt2(pt2_stoch_istate) = w(pt2_stoch_istate)
       else
         call pt2_slave_inproc(i)
@@ -181,7 +225,9 @@ subroutine ZMQ_pt2(E, pt2,relative_error, absolute_error, error)
       print *, '========== ================= ================= ================='
       
     enddo
-    FREE pt2_stoch_istate 
+!    call omp_set_nested(.false.)
+
+    FREE pt2_stoch_istate
     state_average_weight(:) = state_average_weight_save(:)
     TOUCH state_average_weight
   endif
@@ -200,7 +246,7 @@ subroutine pt2_slave_inproc(i)
 end
 
 
-subroutine pt2_collector(zmq_socket_pull, E, relative_error, absolute_error, pt2, error)
+subroutine pt2_collector(zmq_socket_pull, E, relative_error, pt2, error)
   use f77_zmq
   use selection_types
   use bitmasks
@@ -208,7 +254,7 @@ subroutine pt2_collector(zmq_socket_pull, E, relative_error, absolute_error, pt2
 
   
   integer(ZMQ_PTR), intent(in)   :: zmq_socket_pull
-  double precision, intent(in) :: relative_error, absolute_error, E
+  double precision, intent(in) :: relative_error, E
   double precision, intent(out)  :: pt2(N_states), error(N_states)
 
 
@@ -216,6 +262,7 @@ subroutine pt2_collector(zmq_socket_pull, E, relative_error, absolute_error, pt2
   integer(ZMQ_PTR),external      :: new_zmq_to_qp_run_socket
   integer(ZMQ_PTR)               :: zmq_to_qp_run_socket
   integer, external :: zmq_delete_tasks
+  integer, external :: zmq_abort
   integer, external :: pt2_find_sample
 
   integer :: more, n, i, p, c, t, n_tasks, U
@@ -235,6 +282,7 @@ subroutine pt2_collector(zmq_socket_pull, E, relative_error, absolute_error, pt2
   allocate(eI(N_states, N_det_generators), eI_task(N_states, pt2_n_tasks_max))
   allocate(S(pt2_N_teeth+1), S2(pt2_N_teeth+1))
    
+  pt2(:) = -huge(1.)
   S(:) = 0d0
   S2(:) = 0d0
   n = 1
@@ -254,10 +302,12 @@ subroutine pt2_collector(zmq_socket_pull, E, relative_error, absolute_error, pt2
       do while(d(U+1))
         U += 1
       end do
+
+      ! Deterministic part
       do while(t <= pt2_N_teeth)
         if(U >= pt2_n_0(t+1)) then
           t=t+1
-          E0 = E
+          E0 = 0.d0
           do i=pt2_n_0(t),1,-1
             E0 += eI(pt2_stoch_istate, i)
           end do
@@ -266,8 +316,9 @@ subroutine pt2_collector(zmq_socket_pull, E, relative_error, absolute_error, pt2
         end if
       end do
 
+      ! Add Stochastic part
       c = pt2_R(n)
-      if(c /= 0) then
+      if(c > 0) then
         x = 0d0
         do p=pt2_N_teeth, 1, -1
           v = pt2_u_0 + pt2_W_T * (pt2_u(c) + dble(p-1))
@@ -276,13 +327,26 @@ subroutine pt2_collector(zmq_socket_pull, E, relative_error, absolute_error, pt2
           S(p) += x
           S2(p) += x**2
         end do
-        avg = S(t) / dble(c)
-        eqt = (S2(t) / c) - (S(t)/c)**2
-        eqt = sqrt(eqt / dble(c-1+1))
-        pt2(pt2_stoch_istate) = E0-E+avg
-        error(pt2_stoch_istate) = eqt
+        avg = E0 + S(t) / dble(c)
+        pt2(pt2_stoch_istate) = avg
+        ! 1/(N-1.5) : see  Brugger, The American Statistician (23) 4 p. 32 (1969)
+        if(c > 2) then
+          eqt = dabs((S2(t) / c) - (S(t)/c)**2) ! dabs for numerical stability
+          eqt = sqrt(eqt / (dble(c) - 1.5d0))  
+          error(pt2_stoch_istate) = eqt
+          if(mod(c,10)==0 .or. n==N_det_generators) then
+            print '(G10.3, 2X, F16.10, 2X, G16.3, 2X, F16.4, A20)', c, avg+E, eqt, time-time0, ''
+            if( dabs(error(pt2_stoch_istate) / pt2(pt2_stoch_istate)) < relative_error) then
+              if (zmq_abort(zmq_to_qp_run_socket) == -1) then
+                call sleep(10)
+                if (zmq_abort(zmq_to_qp_run_socket) == -1) then
+                  print *, irp_here, ': Error in sending abort signal (2)'
+                endif
+              endif
+            endif
+          endif
+        endif
         time = omp_get_wtime()
-        if(mod(c,10)==1 .or. n==N_det_generators) print '(G10.3, 2X, F16.10, 2X, G16.3, 2X, F16.4, A20)', c, avg+E0, eqt, time-time0, ''
       end if
       n += 1
     else if(more == 0) then
@@ -318,8 +382,13 @@ integer function pt2_find_sample(v, w)
       r = i
     end if
   end do
-
-  pt2_find_sample = r
+  i = r
+  do r=i+1,N_det_generators
+    if (w(r) /= w(i)) then 
+      exit
+    endif
+  enddo
+  pt2_find_sample = r-1
 end function
 
 
@@ -343,11 +412,18 @@ end function
       d(i) = .true.
       pt2_J(i) = i
   end do
-  call random_seed(put=(/3211,64,6566,321,65,321,654,65,321,6321,654,65,321,621,654,65,321,65,654,65,321,65/)) 
-  call RANDOM_NUMBER(pt2_u)
-  call RANDOM_NUMBER(pt2_u)
-  
 
+  integer :: m
+  integer, allocatable :: seed(:)
+  call random_seed(size=m)
+  allocate(seed(m))
+  do i=1,m
+    seed(i) = i
+  enddo
+  call random_seed(put=seed)
+  deallocate(seed)
+
+  call RANDOM_NUMBER(pt2_u)
   
   U = 0
   
@@ -400,9 +476,22 @@ END_PROVIDER
   tilde_cW(0) = 0d0
   
   do i=1,N_det_generators
-    tilde_w(i)  = psi_coef_generators(i,pt2_stoch_istate)**2
+    tilde_w(i)  = psi_coef_sorted_gen(i,pt2_stoch_istate)**2 !+ 1.d-20
+  enddo
+
+  double precision :: norm
+  norm = 0.d0
+  do i=N_det_generators,1,-1
+    norm += tilde_w(i) 
+  enddo
+
+  tilde_w(:) = tilde_w(:) / norm
+
+  tilde_cW(0) = -1.d0
+  do i=1,N_det_generators
     tilde_cW(i) = tilde_cW(i-1) + tilde_w(i)
   enddo
+  tilde_cW(:) = tilde_cW(:) + 1.d0
   
   pt2_n_0(1) = 0
   do
@@ -429,6 +518,10 @@ END_PROVIDER
   pt2_w(:pt2_n_0(1)) = tilde_w(:pt2_n_0(1))
   do t=1, pt2_N_teeth
     tooth_width = tilde_cW(pt2_n_0(t+1)) - tilde_cW(pt2_n_0(t))
+    if (tooth_width == 0.d0) then
+      tooth_width = sum(tilde_w(pt2_n_0(t):pt2_n_0(t+1)))
+    endif
+    ASSERT(tooth_width > 0.d0)
     do i=pt2_n_0(t)+1, pt2_n_0(t+1)
       pt2_w(i) = tilde_w(i) * pt2_W_T / tooth_width
     end do

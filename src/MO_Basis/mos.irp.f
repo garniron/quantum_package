@@ -9,6 +9,10 @@ BEGIN_PROVIDER [ integer, mo_tot_num ]
   if (mpi_master) then
     call ezfio_has_mo_basis_mo_tot_num(has)
   endif
+  IRP_IF MPI_DEBUG
+    print *,  irp_here, mpi_rank
+    call MPI_BARRIER(MPI_COMM_WORLD, ierr)
+  IRP_ENDIF
   IRP_IF MPI
     include 'mpif.h'
     integer                        :: ierr
@@ -71,6 +75,10 @@ BEGIN_PROVIDER [ double precision, mo_coef, (ao_num,mo_tot_num) ]
     ! Coefs
     call ezfio_has_mo_basis_mo_coef(exists)
   endif
+  IRP_IF MPI_DEBUG
+    print *,  irp_here, mpi_rank
+    call MPI_BARRIER(MPI_COMM_WORLD, ierr)
+  IRP_ENDIF
   IRP_IF MPI
     include 'mpif.h'
     integer :: ierr
@@ -136,6 +144,10 @@ BEGIN_PROVIDER [ character*(64), mo_label ]
     endif
     write(*,*) '* mo_label          ', trim(mo_label)
   endif
+  IRP_IF MPI_DEBUG
+    print *,  irp_here, mpi_rank
+    call MPI_BARRIER(MPI_COMM_WORLD, ierr)
+  IRP_ENDIF
   IRP_IF MPI
     include 'mpif.h'
     integer :: ierr
@@ -198,6 +210,10 @@ BEGIN_PROVIDER [ double precision, mo_occ, (mo_tot_num) ]
     endif
     write(*,*) 'Read mo_occ'
   endif
+  IRP_IF MPI_DEBUG
+    print *,  irp_here, mpi_rank
+    call MPI_BARRIER(MPI_COMM_WORLD, ierr)
+  IRP_ENDIF
   IRP_IF MPI
     include 'mpif.h'
     integer :: ierr

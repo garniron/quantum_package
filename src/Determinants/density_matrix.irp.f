@@ -398,7 +398,7 @@ BEGIN_PROVIDER [ double precision, c0_weight, (N_states) ]
  do i=1,N_states
    c0_weight(i) = 1.d-31
    c = maxval(psi_coef(:,i) * psi_coef(:,i))
-   c0_weight(i) = 1.d0/c
+   c0_weight(i) = 1.d0/(c+1.d-20)
    c0_weight(i) = min(c0_weight(i), 100.d0)
  enddo
  if (mpi_master) then

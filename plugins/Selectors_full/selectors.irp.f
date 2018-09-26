@@ -10,17 +10,15 @@ BEGIN_PROVIDER [ integer, N_det_selectors]
   double precision               :: norm, norm_max
   call write_time(6)
   N_det_selectors = N_det
-  if (threshold_generators < 1.d0) then
-    norm = 0.d0
-    do i=1,N_det
-      norm = norm + psi_average_norm_contrib_sorted(i)
-      if (norm > threshold_selectors) then
-        N_det_selectors = i
-        exit
-      endif
-    enddo
-    N_det_selectors = max(N_det_selectors,N_det_generators)
-  endif
+  norm = 1.d0
+  do i=1,N_det
+    norm = norm - psi_average_norm_contrib_sorted(i)
+    if (norm - 1.d-10 < 1.d0 - threshold_selectors) then
+      N_det_selectors = i
+      exit
+    endif
+  enddo
+  N_det_selectors = max(N_det_selectors,N_det_generators)
   call write_int(6,N_det_selectors,'Number of selectors')
 END_PROVIDER
 

@@ -9,11 +9,11 @@ BEGIN_PROVIDER [ integer, N_det_generators ]
  integer :: i
  double precision :: norm
  call write_time(6)
- norm = 0.d0
+ norm = 1.d0
  N_det_generators = N_det
  do i=1,N_det
-   norm = norm + psi_average_norm_contrib_sorted(i)
-   if (norm > threshold_generators+1d-10) then
+   norm = norm - psi_average_norm_contrib_sorted(i)
+   if (norm - 1.d-10 < 1.d0 - threshold_generators) then
      N_det_generators = i
      exit
    endif

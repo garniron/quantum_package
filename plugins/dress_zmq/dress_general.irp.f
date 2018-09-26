@@ -42,6 +42,7 @@ subroutine run_dressing(N_st,energy)
       do i=1,N_st
         print *,  i, ci_energy_dressed(i)
       enddo
+      energy(1:N_st) = ci_energy_dressed(1:N_st)
       call diagonalize_ci_dressed
       E_new = sum(psi_energy(:))
 
@@ -61,10 +62,9 @@ subroutine run_dressing(N_st,energy)
     enddo
     print *,  'Dressed energy <Psi|H+Delta|Psi>'
     do i=1,N_st
-      print *,  i, ci_energy_dressed(i)+nuclear_repulsion
+      print *,  i, ci_energy_dressed(i)
     enddo
   endif
   
-  if(.true.) energy(1:N_st) = 0d0 ! ci_energy_dressed(1:N_st)
 end
 

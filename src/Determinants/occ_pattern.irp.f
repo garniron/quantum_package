@@ -51,9 +51,10 @@ subroutine occ_pattern_to_dets(o,d,sze,n_alpha,Nint)
   integer(bit_kind),intent(in)   :: o(Nint,2)
   integer(bit_kind),intent(out)  :: d(Nint,2,sze)
   
-  integer                        :: i, k, nt, na, nd, amax
+  integer                        :: i, l, k, nt, na, nd, amax
   integer                        :: list_todo(2*n_alpha)
   integer                        :: list_a(2*n_alpha)
+  integer                        :: ishift
 
   amax = n_alpha
   do k=1,Nint
@@ -69,7 +70,7 @@ subroutine occ_pattern_to_dets(o,d,sze,n_alpha,Nint)
 
   sze = nd
   
-  integer :: ne(2), l
+  integer :: ne(2)
   l=0
   do i=1,nd
     ne(1) = 0
@@ -90,6 +91,7 @@ subroutine occ_pattern_to_dets(o,d,sze,n_alpha,Nint)
 
 end
 
+
 recursive subroutine  rec_occ_pattern_to_dets(list_todo,nt,list_a,na,d,nd,sze,amax,Nint)
   use bitmasks
   implicit none
@@ -98,6 +100,7 @@ recursive subroutine  rec_occ_pattern_to_dets(list_todo,nt,list_a,na,d,nd,sze,am
   integer,intent(inout)          :: list_todo(nt)
   integer, intent(inout)         :: list_a(na+1),nd
   integer(bit_kind),intent(inout) :: d(Nint,2,sze)
+  integer :: iint, ipos, i,j,k
 
   if (na == amax) then
     nd += 1
@@ -106,14 +109,17 @@ recursive subroutine  rec_occ_pattern_to_dets(list_todo,nt,list_a,na,d,nd,sze,am
       print *,  irp_here, ': sze = ', sze
       stop 'bug in rec_occ_pattern_to_dets'
     endif
-    if (na > 0) then
-      call list_to_bitstring( d(1,1,nd), list_a, na, Nint)
-    endif
-    if (nt > 0) then
-      call list_to_bitstring( d(1,2,nd), list_todo, nt, Nint)
-    endif
+    do i=1,na
+      iint = ishft(list_a(i)-1,-bit_kind_shift) + 1
+      ipos = list_a(i)-ishft((iint-1),bit_kind_shift)-1
+      d(iint,1,nd) = ibset( d(iint,1,nd), ipos )
+    enddo
+    do i=1,nt
+      iint = ishft(list_todo(i)-1,-bit_kind_shift) + 1
+      ipos = list_todo(i)-ishft((iint-1),bit_kind_shift)-1
+      d(iint,2,nd) = ibset( d(iint,2,nd), ipos )
+    enddo
   else
-    integer :: i, j, k
     integer, allocatable :: list_todo_tmp(:)
     allocate (list_todo_tmp(nt))
     do i=1,nt
@@ -248,6 +254,55 @@ end
 
 END_PROVIDER 
 
+BEGIN_PROVIDER [ integer, det_to_occ_pattern, (N_det) ]
+ implicit none
+ BEGIN_DOC
+ ! Returns the index of the occupation pattern for each determinant
+ END_DOC
+ integer :: i,j,k
+ integer(bit_kind) :: occ(N_int,2)
+ logical :: found
+ !$OMP PARALLEL DO DEFAULT(SHARED) &
+ !$OMP PRIVATE(i,k,j,found,occ)
+ do i=1,N_det
+    do k = 1, N_int
+      occ(k,1) = ieor(psi_det(k,1,i),psi_det(k,2,i))
+      occ(k,2) = iand(psi_det(k,1,i),psi_det(k,2,i))
+    enddo
+    do j=1,N_occ_pattern
+      found = .True.
+      do k=1,N_int
+        if ( (occ(k,1) /= psi_occ_pattern(k,1,j)) &
+        .or. (occ(k,2) /= psi_occ_pattern(k,2,j)) ) then
+          found = .False.
+          exit
+        endif
+      enddo
+      if (found) then
+        det_to_occ_pattern(i) = j
+        exit
+      endif
+    enddo
+ enddo
+ !$OMP END PARALLEL DO
+END_PROVIDER
+
+BEGIN_PROVIDER [ double precision, weight_occ_pattern, (N_occ_pattern,N_states) ]
+ implicit none
+ BEGIN_DOC
+ ! Weight of the occupation patterns in the wave function
+ END_DOC
+ integer :: i,j,k
+ weight_occ_pattern = 0.d0
+ do i=1,N_det
+  j = det_to_occ_pattern(i)
+  do k=1,N_states
+    weight_occ_pattern(j,k) += psi_coef(i,k) * psi_coef(i,k)
+  enddo
+ enddo
+END_PROVIDER
+
+
 subroutine make_s2_eigenfunction
   implicit none
   integer                        :: i,j,k
@@ -268,7 +323,7 @@ subroutine make_s2_eigenfunction
   smax = s
   ithread=0
   !$ ithread = omp_get_thread_num()
-  !$OMP DO 
+  !$OMP DO SCHEDULE (dynamic,1000)
   do i=1,N_occ_pattern
     call occ_pattern_to_dets_size(psi_occ_pattern(1,1,i),s,elec_alpha_num,N_int)
     s += 1
@@ -281,10 +336,7 @@ subroutine make_s2_eigenfunction
     do j=1,s
       if (.not. is_in_wavefunction(d(1,1,j), N_int) ) then
         N_det_new += 1
-        do k=1,N_int
-          det_buffer(k,1,N_det_new) = d(k,1,j)
-          det_buffer(k,2,N_det_new) = d(k,2,j)
-        enddo
+        det_buffer(:,:,N_det_new) = d(:,:,j)
         if (N_det_new == bufsze) then
           call fill_H_apply_buffer_no_selection(bufsze,det_buffer,N_int,ithread)
           N_det_new = 0

@@ -1,12 +1,17 @@
 program s2_eig_restart
  implicit none
  read_wf = .True.
- call routine
+ if (s2_eig) then
+  call routine_s2
+ else
+  call routine
+ endif
 end
+
 subroutine routine
  implicit none
  integer :: ndet_max
- print*, 'How many determinants would you like ?'
+ print*, 'Max number of determinants ?'
  read(5,*)ndet_max
  integer(bit_kind), allocatable :: psi_det_tmp(:,:,:)
  double precision, allocatable :: psi_coef_tmp(:,:)
@@ -34,6 +39,53 @@ subroutine routine
   enddo
  enddo
 
- call save_wavefunction_general(ndet_max,N_states,psi_det_tmp,N_det_max,psi_coef_tmp)
+ call save_wavefunction_general(ndet_max,N_states,psi_det_tmp,size(psi_coef_tmp,1),psi_coef_tmp)
+ 
+end
+
+subroutine routine_s2
+ implicit none
+ integer :: ndet_max
+ double precision :: wmin
+ integer(bit_kind), allocatable :: psi_det_tmp(:,:,:)
+ double precision, allocatable :: psi_coef_tmp(:,:)
+ integer :: i,j,k
+ double precision :: accu(N_states)
+
+ print*, 'Min weight of the occupation pattern ?'
+ read(5,*) wmin
+
+ ndet_max = 0
+ do i=1,N_det
+   if (maxval(weight_occ_pattern( det_to_occ_pattern(i),:)) < wmin) cycle
+   ndet_max = ndet_max+1
+ enddo
+
+ allocate(psi_det_tmp(N_int,2,ndet_max),psi_coef_tmp(ndet_max, N_states))
+ 
+ accu = 0.d0
+ k=0
+ do i = 1, N_det
+  if (maxval(weight_occ_pattern( det_to_occ_pattern(i),:)) < wmin) cycle
+  k = k+1
+  do j = 1, N_int
+   psi_det_tmp(j,1,k) = psi_det(j,1,i)
+   psi_det_tmp(j,2,k) = psi_det(j,2,i)
+  enddo
+  do j = 1, N_states
+   psi_coef_tmp(k,j) = psi_coef(i,j)
+   accu(j) += psi_coef_tmp(k,j) **2
+  enddo
+ enddo
+ do j = 1, N_states
+  accu(j) = 1.d0/dsqrt(accu(j))
+ enddo
+ do j = 1, N_states
+  do i = 1, ndet_max
+   psi_coef_tmp(i,j) = psi_coef_tmp(i,j) * accu(j)
+  enddo
+ enddo
+
+ call save_wavefunction_general(ndet_max,N_states,psi_det_tmp,size(psi_coef_tmp,1),psi_coef_tmp)
  
 end

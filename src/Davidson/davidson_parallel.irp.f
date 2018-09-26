@@ -13,7 +13,6 @@ end
 subroutine davidson_slave_tcp(i)
   implicit none
   integer, intent(in)            :: i
-  
   call davidson_run_slave(0,i)
 end
 
@@ -35,6 +34,8 @@ subroutine davidson_run_slave(thread,iproc)
   zmq_to_qp_run_socket = new_zmq_to_qp_run_socket()
 
   integer, external :: connect_to_taskserver 
+
+
 
   if (connect_to_taskserver(zmq_to_qp_run_socket,worker_id,thread) == -1) then 
     call end_zmq_to_qp_run_socket(zmq_to_qp_run_socket) 
@@ -74,23 +75,35 @@ subroutine davidson_slave_work(zmq_to_qp_run_socket, zmq_socket_push, N_st, sze,
   ! Get wave function (u_t)
   ! -----------------------
 
-  integer                        :: rc
+  integer                        :: rc, ni, nj
   integer*8                      :: rc8
   integer                        :: N_states_read, N_det_read, psi_det_size_read
   integer                        :: N_det_selectors_read, N_det_generators_read
   double precision, allocatable  :: energy(:)
 
   integer, external :: zmq_get_dvector
+  integer, external :: zmq_get_dmatrix
 
   allocate(u_t(N_st,N_det))
   allocate (energy(N_st))
 
-  if (zmq_get_dvector(zmq_to_qp_run_socket, worker_id, 'u_t', u_t, size(u_t)) == -1) then
+  ! Warning : dimensions are modified for efficiency, It is OK since we get the
+  ! full matrix
+  if (size(u_t,kind=8) < 8388608_8) then
+    ni = size(u_t)
+    nj = 1
+  else
+    ni = 8388608
+    nj = size(u_t,kind=8)/8388608_8 + 1
+  endif
+  if (zmq_get_dmatrix(zmq_to_qp_run_socket, worker_id, 'u_t', u_t, ni, nj, size(u_t,kind=8)) == -1) then
+    print *,  irp_here, ': Unable to get u_t'
     deallocate(u_t,energy)
     return
   endif
 
   if (zmq_get_dvector(zmq_to_qp_run_socket, worker_id, 'energy', energy, size(energy)) == -1) then
+    print *,  irp_here, ': Unable to get energy'
     deallocate(u_t,energy)
     return
   endif
@@ -99,7 +112,7 @@ subroutine davidson_slave_work(zmq_to_qp_run_socket, zmq_socket_push, N_st, sze,
     include 'mpif.h'
     integer :: ierr
 
-    call broadcast_chunks_double(u_t,size(u_t))
+    call broadcast_chunks_double(u_t,size(u_t,kind=8))
     
   IRP_ENDIF
 
@@ -111,7 +124,6 @@ subroutine davidson_slave_work(zmq_to_qp_run_socket, zmq_socket_push, N_st, sze,
   do
     integer, external :: get_task_from_taskserver
     integer, external :: task_done_to_taskserver
-    call sleep(1)
     if (get_task_from_taskserver(zmq_to_qp_run_socket,worker_id, task_id, msg) == -1) then
       exit
     endif
@@ -305,11 +317,12 @@ subroutine H_S2_u_0_nstates_zmq(v_0,s_0,u_0,N_st,sze)
   call new_parallel_job(zmq_to_qp_run_socket,zmq_socket_pull,'davidson')
   
   character*(512) :: task
-  integer :: rc
+  integer :: rc, ni, nj
   integer*8 :: rc8
   double precision :: energy(N_st)
 
   integer, external :: zmq_put_dvector, zmq_put_psi, zmq_put_N_states_diag
+  integer, external :: zmq_put_dmatrix
 
   energy = 0.d0
 
@@ -322,7 +335,16 @@ subroutine H_S2_u_0_nstates_zmq(v_0,s_0,u_0,N_st,sze)
   if (zmq_put_dvector(zmq_to_qp_run_socket,1,'energy',energy,size(energy)) == -1) then
     stop 'Unable to put energy on ZMQ server'
   endif
-  if (zmq_put_dvector(zmq_to_qp_run_socket, 1, 'u_t', u_t, size(u_t)) == -1) then
+  if (size(u_t) < 8388608) then
+    ni = size(u_t)
+    nj = 1
+  else
+    ni = 8388608
+    nj = size(u_t)/8388608 + 1
+  endif
+  ! Warning : dimensions are modified for efficiency, It is OK since we get the
+  ! full matrix
+  if (zmq_put_dmatrix(zmq_to_qp_run_socket, 1, 'u_t', u_t, ni, nj, size(u_t,kind=8)) == -1) then
     stop 'Unable to put u_t on ZMQ server'
   endif
 
@@ -333,14 +355,13 @@ subroutine H_S2_u_0_nstates_zmq(v_0,s_0,u_0,N_st,sze)
   ! ============
 
   integer :: istep, imin, imax, ishift
-  double precision :: w, max_workload, N_det_inv, di
+  double precision :: w, max_workload, N_det_inv
   integer, external :: add_task_to_taskserver
   w = 0.d0
   istep=1
   ishift=0
   imin=1
   N_det_inv = 1.d0/dble(N_det)
-  di = dble(N_det)
   max_workload = 50000.d0
   do imax=1,N_det
     w = w + 1.d0
@@ -467,10 +488,13 @@ integer function zmq_get_N_states_diag(zmq_to_qp_run_socket, worker_id)
     if (rc /= 4) go to 10
   endif 
 
+  IRP_IF MPI_DEBUG
+    print *,  irp_here, mpi_rank
+    call MPI_BARRIER(MPI_COMM_WORLD, ierr)
+  IRP_ENDIF
   IRP_IF MPI
     include 'mpif.h'
     integer :: ierr
-
     call MPI_BCAST (zmq_get_N_states_diag, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
     if (ierr /= MPI_SUCCESS) then
       print *,  irp_here//': Unable to broadcast N_states'
@@ -484,6 +508,7 @@ integer function zmq_get_N_states_diag(zmq_to_qp_run_socket, worker_id)
       endif
     endif
   IRP_ENDIF
+  TOUCH N_states_diag
 
   return
 

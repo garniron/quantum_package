@@ -64,11 +64,7 @@ subroutine run_wf
       PROVIDE psi_bilinear_matrix_rows psi_det_sorted_gen_order psi_bilinear_matrix_order
       PROVIDE psi_bilinear_matrix_transp_rows_loc psi_bilinear_matrix_transp_columns
       PROVIDE psi_bilinear_matrix_transp_order
-      !!$OMP PARALLEL PRIVATE(i)
-      !i = omp_get_thread_num()
-!       call dress_slave_tcp(i+1, energy)
       call dress_slave_tcp(0, energy)
-      !!$OMP END PARALLEL
     endif
   end do
 end
@@ -77,8 +73,6 @@ subroutine dress_slave_tcp(i,energy)
   implicit none
   double precision, intent(in) :: energy(N_states_diag)
   integer, intent(in)            :: i
-  logical :: lstop
-  lstop = .False.
   call run_dress_slave(0,i,energy)
 end
 

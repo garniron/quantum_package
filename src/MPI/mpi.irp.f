@@ -65,11 +65,15 @@ BEGIN_TEMPLATE
 
 subroutine broadcast_chunks_$double(A, LDA)
   implicit none
-  integer, intent(in)             :: LDA
+  integer*8, intent(in)             :: LDA
   $type, intent(inout) :: A(LDA)
   BEGIN_DOC
 ! Broadcast with chunks of ~2GB
   END_DOC
+  IRP_IF MPI_DEBUG
+    print *,  irp_here, mpi_rank
+    call MPI_BARRIER(MPI_COMM_WORLD, ierr)
+  IRP_ENDIF
   IRP_IF MPI
     include 'mpif.h'
     integer :: i, sze, ierr
@@ -80,6 +84,7 @@ subroutine broadcast_chunks_$double(A, LDA)
         print *,  irp_here//': Unable to broadcast chunks $double ', i
         stop -1
       endif
+      call MPI_BARRIER(MPI_COMM_WORLD,ierr)
     enddo
   IRP_ENDIF
 end

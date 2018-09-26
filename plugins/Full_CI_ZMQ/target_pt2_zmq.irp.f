@@ -1,4 +1,4 @@
-program fci_zmq
+program target_pt2
   implicit none
   integer                        :: i,j,k
   logical, external              :: detEq

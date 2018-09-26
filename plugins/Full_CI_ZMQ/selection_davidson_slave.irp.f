@@ -13,9 +13,10 @@ program selection_slave
 end
 
 subroutine provide_everything
-  PROVIDE H_apply_buffer_allocated mo_bielec_integrals_in_map psi_det_generators psi_coef_generators psi_det_sorted_bit psi_selectors n_det_generators n_states generators_bitmask zmq_context n_states_diag
-  PROVIDE pt2_e0_denominator mo_tot_num N_int fragment_count ci_energy mpi_master zmq_state zmq_context
-  PROVIDE psi_det psi_coef
+  PROVIDE H_apply_buffer_allocated mo_bielec_integrals_in_map psi_det_generators psi_coef_generators psi_det_sorted_bit psi_selectors n_det_generators n_states generators_bitmask zmq_context N_states_diag
+  PROVIDE pt2_e0_denominator mo_tot_num N_int ci_energy mpi_master zmq_state zmq_context
+  PROVIDE psi_det psi_coef threshold_generators threshold_selectors state_average_weight 
+  PROVIDE N_det_selectors pt2_stoch_istate N_det 
 end
 
 subroutine run_wf
@@ -35,12 +36,11 @@ subroutine run_wf
   double precision :: t0, t1
   
   integer, external              :: zmq_get_dvector, zmq_get_N_det_generators 
+  integer, external              :: zmq_get8_dvector
   integer, external              :: zmq_get_ivector
   integer, external              :: zmq_get_psi, zmq_get_N_det_selectors
   integer, external              :: zmq_get_N_states_diag
 
-  call provide_everything
-  
   zmq_context = f77_zmq_ctx_new ()
   states(1) = 'selection'
   states(2) = 'davidson'
@@ -49,6 +49,13 @@ subroutine run_wf
 
   zmq_to_qp_run_socket = new_zmq_to_qp_run_socket()
 
+  PROVIDE psi_det psi_coef threshold_generators threshold_selectors state_average_weight mpi_master
+  PROVIDE zmq_state N_det_selectors pt2_stoch_istate N_det pt2_e0_denominator
+  PROVIDE N_det_generators N_states N_states_diag psi_energy
+
+  IRP_IF MPI
+    call MPI_BARRIER(MPI_COMM_WORLD, ierr)
+  IRP_ENDIF
   do
 
     if (mpi_master) then
@@ -62,6 +69,10 @@ subroutine run_wf
       print *,  trim(zmq_state)
     endif
 
+    IRP_IF MPI_DEBUG
+      print *,  irp_here, mpi_rank
+      call MPI_BARRIER(MPI_COMM_WORLD, ierr)
+    IRP_ENDIF
     IRP_IF MPI
       call MPI_BCAST (zmq_state, 128, MPI_CHARACTER, 0, MPI_COMM_WORLD, ierr)
       if (ierr /= MPI_SUCCESS) then
@@ -146,6 +157,12 @@ subroutine run_wf
       ! PT2
       ! ---
 
+      IRP_IF MPI
+        call MPI_BARRIER(MPI_COMM_WORLD, ierr)
+        if (ierr /= MPI_SUCCESS) then
+          print *,  irp_here, 'error in barrier'
+        endif
+      IRP_ENDIF
       call wall_time(t0)
       if (zmq_get_psi(zmq_to_qp_run_socket,1) == -1) cycle
       if (zmq_get_N_det_generators (zmq_to_qp_run_socket, 1) == -1) cycle
@@ -168,13 +185,19 @@ subroutine run_wf
 
       call wall_time(t1)
       call write_double(6,(t1-t0),'Broadcast time')
+      IRP_IF MPI
+        call MPI_BARRIER(MPI_COMM_WORLD, ierr)
+        if (ierr /= MPI_SUCCESS) then
+          print *,  irp_here, 'error in barrier'
+        endif
+      IRP_ENDIF
 
-      logical :: lstop
-      lstop = .False.
-      !$OMP PARALLEL PRIVATE(i)
-      i = omp_get_thread_num()
-      call run_pt2_slave(0,i,pt2_e0_denominator)
-      !$OMP END PARALLEL
+      if (.true.) then
+        !$OMP PARALLEL PRIVATE(i)
+        i = omp_get_thread_num()
+        call run_pt2_slave(0,i,pt2_e0_denominator)
+        !$OMP END PARALLEL
+      endif
       print *,  'PT2 done'
       FREE state_average_weight
 

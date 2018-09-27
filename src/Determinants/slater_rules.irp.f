@@ -525,11 +525,6 @@ subroutine i_H_j_s2(key_i,key_j,Nint,hij,s2)
   ASSERT (sum(popcnt(key_j(:,1))) == elec_alpha_num)
   ASSERT (sum(popcnt(key_j(:,2))) == elec_beta_num)
   
-  if(sum(popcnt(key_i(:,1))) /= elec_alpha_num) stop "STOP2P 1"
-  if(sum(popcnt(key_i(:,2))) /= elec_beta_num) stop "STOP2P 2"
-  if(sum(popcnt(key_j(:,1))) /= elec_alpha_num) stop "ST2OPP 3"
-  if(sum(popcnt(key_j(:,2))) /= elec_beta_num) stop "ST2OPP 4"
-  
   hij = 0.d0
   s2 = 0d0
   !DIR$ FORCEINLINE
@@ -631,10 +626,6 @@ subroutine i_H_j(key_i,key_j,Nint,hij)
   ASSERT (sum(popcnt(key_i(:,2))) == elec_beta_num)
   ASSERT (sum(popcnt(key_j(:,1))) == elec_alpha_num)
   ASSERT (sum(popcnt(key_j(:,2))) == elec_beta_num)
-  if(sum(popcnt(key_i(:,1))) /= elec_alpha_num) stop "STOP2P 1"
-  if(sum(popcnt(key_i(:,2))) /= elec_beta_num) stop "STOP2P 2"
-  if(sum(popcnt(key_j(:,1))) /= elec_alpha_num) stop "ST2OPP 3"
-  if(sum(popcnt(key_j(:,2))) /= elec_beta_num) stop "ST2OPP 4"
   
 
   hij = 0.d0

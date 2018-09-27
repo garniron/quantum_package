@@ -233,7 +233,6 @@ END_PROVIDER
 
 subroutine ZMQ_dress(E, dress, delta_out, delta_s2_out, relative_error)
   use f77_zmq
-  use selection_types
   
   implicit none
   

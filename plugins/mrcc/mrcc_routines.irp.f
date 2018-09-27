@@ -1,3 +1,5 @@
+use bitmasks 
+
 subroutine generator_start(i_gen, iproc, interesting)
   implicit none
   integer, intent(in) :: i_gen, iproc
@@ -18,7 +20,9 @@ end subroutine
 &BEGIN_PROVIDER [ double precision, sij_cache_, (N_det,Nproc) ]
 &BEGIN_PROVIDER [ double precision, dIa_hla_, (N_states,N_det,Nproc) ]
 &BEGIN_PROVIDER [ double precision, dIa_sla_, (N_states,N_det,Nproc) ]
+&BEGIN_PROVIDER [ integer(bit_kind), sorted_mini, (N_int,2,N_det,Nproc) ]
 &BEGIN_PROVIDER [ integer, excs_ , (0:2,2,2,N_det,Nproc) ]
+&BEGIN_PROVIDER [ integer, idx_buf , (N_det, Nproc) ]
 &BEGIN_PROVIDER [ double precision, phases_, (N_det, Nproc) ]
 BEGIN_DOC
  ! temporay arrays for dress_with_alpha_buffer. Avoids reallocation.
@@ -26,7 +30,126 @@ END_DOC
 END_PROVIDER
 
 
-subroutine dress_with_alpha_buffer(Nstates,Ndet,Nint,delta_ij_loc, i_gen, minilist, det_minilist, n_minilist, alpha, iproc)
+ BEGIN_PROVIDER [ integer(bit_kind), psi_ref_detsorted, (N_int,2,N_det_ref) ]
+&BEGIN_PROVIDER [ integer, psi_ref_detsorted_idx, (N_det_ref) ]
+  implicit none
+
+  psi_ref_detsorted = psi_ref(:,:,:N_det_ref)
+  call sort_det(psi_ref_detsorted, psi_ref_detsorted_idx, N_det_ref, n_int)
+
+END_PROVIDER
+
+
+subroutine dress_with_alpha_buffer(Nstates, Ndet,Nint,delta_ij_loc, i_gen, minilist, det_minilist, n_minilist, alpha, iproc)
+  use bitmasks
+  implicit none
+  BEGIN_DOC
+  !delta_ij_loc(:,:,1) : dressing column for H
+  !delta_ij_loc(:,:,2) : dressing column for S2
+  !i_gen : generator index in psi_det_generators
+  !minilist : indices of determinants connected to alpha ( in psi_det )
+  !n_minilist : size of minilist
+  !alpha : alpha determinant
+  END_DOC
+  integer, intent(in)             :: Nint, Ndet, Nstates, n_minilist, iproc, i_gen
+  integer(bit_kind), intent(in)   :: alpha(Nint,2), det_minilist(Nint, 2, n_minilist)
+  integer,intent(in)              :: minilist(n_minilist)
+  integer(bit_kind)               :: dettmp(Nint,2), tmp
+  double precision, intent(inout) :: delta_ij_loc(Nstates,N_det,2)
+  double precision :: hij, sij
+  double precision, external :: diag_H_mat_elem_fock
+  double precision :: c_alpha(N_states)
+  double precision :: hdress, sdress
+  integer :: i, l_sd, j, k, i_I, s, ni
+  logical :: ok
+  double precision               :: phase, phase2
+  integer                        :: degree, exc(0:2,2,2)
+  integer(8), save :: diamond = 0
+  if(n_minilist == 1) return
+  !check if not linked to reference
+  do i=1,n_minilist
+    if(idx_non_ref_rev(minilist(i)) == 0) then
+      return
+    end if
+  end do
+  
+  sorted_mini(:,:,:n_minilist,iproc) = det_minilist(:,:,:)
+  call sort_det(sorted_mini(1,1,1,iproc), idx_buf(1,iproc), n_minilist, nint)
+  
+  c_alpha = 0d0
+  
+  do i=1,n_minilist
+    !call get_excitation_degree(alpha, psi_ref(1,1,i_I), degree, nint)
+    !if(degree > 4) cycle
+    do s=1,2
+    do ni=1,nint
+      dettmp(ni,s) = alpha(ni,s)-sorted_mini(ni,s,i,iproc)
+    end do
+    end do
+    i_I=1
+    j=i+1
+
+    diamondloop : do while(i_I <= N_det_ref .and. j <= n_minilist)
+      
+      do s=1,2
+      do ni=nint,1,-1
+        if(sorted_mini(ni,s,j,iproc) - psi_ref_detsorted(ni,s,i_I) > dettmp(ni,s)) then
+          i_I += 1
+          cycle diamondloop
+        else if(sorted_mini(ni,s,j,iproc) - psi_ref_detsorted(ni,s,i_I) < dettmp(ni,s)) then
+          j += 1
+          cycle diamondloop
+        end if
+      end do
+      end do
+    
+      !check potential diamond found
+
+      do s=1,2
+      do ni=1,nint
+        tmp = ieor(sorted_mini(ni,s,i,iproc), sorted_mini(ni,s,j,iproc))
+        tmp = ieor(tmp, psi_ref_detsorted(ni,s,i_I))
+        tmp = ieor(tmp, alpha(ni,s))
+        if(tmp /= 0_8) then
+          !print *, "fake diamond spotted"
+          !i_I += 1
+          j += 1
+          cycle diamondloop
+        end if
+      end do 
+      end do
+      !diamond += 1
+      !if(mod(diamond,100000) == 1) print *, "diam", diamond
+      !diamond found
+      if(det_minilist(1,1,idx_buf(j,iproc)) /= sorted_mini(1,1,j,iproc)) stop "STOOPE"
+      call get_excitation(psi_ref_detsorted(1,1,i_I),det_minilist(1,1,idx_buf(j,iproc)),exc,degree,phase,Nint)
+      call get_excitation(alpha,det_minilist(1,1,idx_buf(i,iproc)),exc,degree,phase2,Nint)
+
+      do s=1,Nstates
+        c_alpha(s) += psi_ref_coef(psi_ref_detsorted_idx(i_I), s) * dij(psi_ref_detsorted_idx(i_I), idx_non_ref_rev(minilist(idx_buf(i,iproc))), s) &
+            * dij(psi_ref_detsorted_idx(i_I), idx_non_ref_rev(minilist(idx_buf(j,iproc))), s) * phase * phase2
+      end do
+      !i_I += 1
+      j += 1
+    end do diamondloop
+  end do
+
+  if(maxval(c_alpha) == 0d0 .and. minval(c_alpha) == 0d0) return
+  
+  do i=1,n_minilist
+    call i_h_j_s2(alpha,det_minilist(1,1,i),N_int,hij, sij)
+    do s=1,Nstates
+      hdress = c_alpha(s) * hij
+      sdress = c_alpha(s) * sij
+      delta_ij_loc(s, minilist(i), 1) += hdress
+      delta_ij_loc(s, minilist(i), 2) += sdress
+    end do
+  end do
+end subroutine
+
+
+
+subroutine dress_with_alpha_buffer_neu(Nstates,Ndet,Nint,delta_ij_loc, i_gen, minilist, det_minilist, n_minilist, alpha, iproc)
   use bitmasks
   implicit none
   BEGIN_DOC
@@ -50,8 +173,9 @@ subroutine dress_with_alpha_buffer(Nstates,Ndet,Nint,delta_ij_loc, i_gen, minili
   logical :: ok
   double precision               :: phase, phase2
   integer                        :: degree, exc(0:2,2,2)
+  integer(8), save :: diamond = 0
   if(n_minilist == 1) return
-  !chekc actutally not linked to reference
+  !check if not linked to reference
   do i=1,n_minilist
     if(idx_non_ref_rev(minilist(i)) == 0) then
       return
@@ -61,6 +185,9 @@ subroutine dress_with_alpha_buffer(Nstates,Ndet,Nint,delta_ij_loc, i_gen, minili
   c_alpha = 0d0
   
   do i_I=1,N_det_ref
+    call get_excitation_degree(alpha, psi_ref(1,1,i_I), degree, nint)
+    if(degree > 4) cycle
+
     do i=1,n_minilist
     diamondloop : do j=i+1,n_minilist
       do s=1,2
@@ -72,6 +199,8 @@ subroutine dress_with_alpha_buffer(Nstates,Ndet,Nint,delta_ij_loc, i_gen, minili
       end do 
       end do
       !diamond found
+      diamond += 1
+      if(mod(diamond,10000) == 1) print *, "diam", diamond
 
       call get_excitation(psi_ref(1,1,i_I),det_minilist(1,1,j),exc,degree,phase,Nint)
       call get_excitation(alpha,det_minilist(1,1,i),exc,degree,phase2,Nint)

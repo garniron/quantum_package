@@ -10,11 +10,12 @@
 END_PROVIDER
 
 
-subroutine generator_start(i_gen, iproc)
+subroutine generator_start(i_gen, iproc, interesting)
   implicit none
   integer, intent(in) :: i_gen, iproc
+  logical, intent(inout) :: interesting
   integer :: i
-  
+  interesting = .true.
   call build_fock_tmp(fock_diag_tmp_(1,1,iproc),psi_det_generators(1,1,i_gen),N_int)
 end subroutine
 

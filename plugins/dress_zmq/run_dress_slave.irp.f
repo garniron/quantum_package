@@ -41,7 +41,9 @@ subroutine run_dress_slave(thread,iproce,energy)
 ! double precision, external :: omp_get_wtime
   double precision :: time, time0
   integer :: ntask_tbd, task_tbd(Nproc), i_gen_tbd(Nproc), subset_tbd(Nproc)
-  
+  logical :: interesting
+
+
   allocate(delta_det(N_states, N_det, 0:pt2_N_teeth+1, 2))
   allocate(cp(N_states, N_det, dress_N_cp, 2))
   allocate(edI(N_det_generators), f(N_det_generators))
@@ -70,7 +72,7 @@ subroutine run_dress_slave(thread,iproce,energy)
   ending = dress_N_cp+1
   ntask_tbd = 0
   !$OMP PARALLEL DEFAULT(SHARED) &
-  !$OMP PRIVATE(breve_delta_m, task_id) &
+  !$OMP PRIVATE(interesting, breve_delta_m, task_id) &
   !$OMP PRIVATE(tmp,fac,m,l,t,sum_f,n_tasks) &
   !$OMP PRIVATE(i,p,will_send, i_generator, subset, iproc) &
   !$OMP PRIVATE(zmq_to_qp_run_socket, zmq_socket_push, worker_id) &
@@ -157,9 +159,12 @@ subroutine run_dress_slave(thread,iproce,energy)
       !UPDATE i_generator
 
       breve_delta_m(:,:,:) = 0d0
-      call generator_start(i_generator, iproc)
+      call generator_start(i_generator, iproc, interesting)
+
       time0 = omp_get_wtime()
-      call alpha_callback(breve_delta_m, i_generator, subset, pt2_F(i_generator), iproc)
+      if(interesting) then
+        call alpha_callback(breve_delta_m, i_generator, subset, pt2_F(i_generator), iproc)
+      end if
       time = omp_get_wtime()
       t = dress_T(i_generator)
     
